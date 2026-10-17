@@ -44,7 +44,7 @@
 (function (root) {
 'use strict';
 const Brain = root.Brain || (typeof require !== 'undefined' ? require('../embodied-2d/brain.js') : null);
-const { makeRng, Network } = Brain;
+const { makeRng, Network, toBase64, fromBase64 } = Brain;
 
 /* ---------------- the laws ---------------- */
 const POLICIES = [
@@ -163,9 +163,24 @@ const PARTY_COLORS = ['#3987e5', '#d95926', '#199e70', '#c98500', '#d55181', '#0
 
 /* ---------------- helpers ---------------- */
 const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+/** A fixed personal liking (-1..1) of one citizen for one party: nothing learned, just people being different. */
+function taste(cid, pid) {
+  let h = (cid * 2654435761 ^ (parseInt(pid.slice(1), 10) * 40503)) >>> 0;
+  h = Math.imul(h ^ (h >>> 16), 2246822519) >>> 0; h = Math.imul(h ^ (h >>> 13), 3266489917) >>> 0;
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296 * 2 - 1;
+}
 const sig = x => 1 / (1 + Math.exp(-x));
-const BRAIN_SIZES = [10, 8, NP];
-const INPUT_NAMES = ['Unemployment', 'Inequality', 'Growth', 'Crime', 'Debt', 'Unrest', 'Happiness', 'Our support', 'In power', 'Election soon'];
+// Brains see the country and answer with every law, plus two big choices: campaign for a new system, and go to war.
+const OUT_CHANGE = NP, OUT_WAR = NP + 1;
+const BRAIN_SIZES = [12, 8, NP + 2];
+const INPUT_NAMES = ['Unemployment', 'Inequality', 'Growth', 'Crime', 'Debt', 'Unrest', 'Happiness', 'Our support', 'In power', 'Election soon', 'At war', 'Winning the war'];
+const OUTPUT_NAMES = POLICIES.map(p => p.name).concat(['New system', 'Go to war']);
+// Citizens' beliefs: one weight per law, plus one for "being at war with Ostria".
+const W_WAR = NP, NW = NP + 1;
+const NEIGHBOUR = 'Ostria';
+const LOBBY_ACTIONS = ['Save', 'Donate', 'Bribe', 'Buy press'];
+const NLA = LOBBY_ACTIONS.length;
+const SAVE_FORMAT = 'glassbox-politics';
 const ACTIONS = ['Stay quiet', 'Protest', 'Strike', 'Rise up'];
 const NA = ACTIONS.length;
 const ACTION_COST = [0, 0.05, 0.08, 0.15];   // time, effort and risk of acting
@@ -217,14 +232,26 @@ class World {
     this.Phist = [];              // policy vector each month, for "a year ago"
     this.pending = [];            // bribes not yet found out
 
-    this.citizens = [];
-    for (let i = 0; i < this.N; i++) this.citizens.push(this._newCitizen(null, 18 + this.rng() * 62));
+    // neighbours and the wider world
+    this.ostria = { A: 100, army: 0.45 };   // the neighbouring country: its economy and its army
+    this.war = null; this.wars = []; this.lastWarEnd = -180;
+    this.abroad = 0.62;                     // how good life is abroad, for someone who emigrates
+    this.letters = []; this.departures = [];
+    this.emigYear = 0; this.immigYear = 0; this.caughtYear = 0;
+    // who owns the newspapers
+    this.press = { independent: 1, state: 0, industry: 0, unions: 0, small: 0 };
+    // peaceful change of system: an amendment in progress, or a long run of wanting change
+    this.amendment = null; this.directRun = null; this.pactRun = null;
+
+    this.N0 = this.N;
+    this.citizens = []; this.freeHomes = []; this.nextHome = 0;
+    for (let i = 0; i < this.N; i++) { const c = this._newCitizen(null, 18 + this.rng() * 62); c.home = this.nextHome++; this.citizens.push(c); }
     this._reconcileClasses(true);
 
     this.lobbies = [
-      { id: 'industry', name: 'Industry Council', cls: 'owner', money: 0, q: new Float32Array(4 * 3), last: null, top: 0, dir: 0, sBefore: 0, log: [] },
-      { id: 'unions', name: "Workers' Federation", cls: 'worker', money: 0, q: new Float32Array(4 * 3), last: null, top: 0, dir: 0, sBefore: 0, log: [] },
-      { id: 'small', name: "Smallholders' League", cls: 'small', money: 0, q: new Float32Array(4 * 3), last: null, top: 0, dir: 0, sBefore: 0, log: [] },
+      { id: 'industry', name: 'Industry Council', cls: 'owner', money: 0, q: new Float32Array(4 * NLA), last: null, top: 0, dir: 0, sBefore: 0, log: [] },
+      { id: 'unions', name: "Workers' Federation", cls: 'worker', money: 0, q: new Float32Array(4 * NLA), last: null, top: 0, dir: 0, sBefore: 0, log: [] },
+      { id: 'small', name: "Smallholders' League", cls: 'small', money: 0, q: new Float32Array(4 * NLA), last: null, top: 0, dir: 0, sBefore: 0, log: [] },
     ];
 
     const start = IDX[opts.start] ?? IDX.democracy;
@@ -249,28 +276,27 @@ class World {
   }
 
   /* ---------------- citizens ---------------- */
-  _newCitizen(parent, age) {
-    const r = this.rng, region = parent ? parent.region : Math.floor(r() * NR);
-    const R = REGIONS[region];
-    // place inside the region: around its centre, the map page snaps them onto land
-    const a = r() * Math.PI * 2, d = Math.sqrt(r()) * 0.11;
+  _newCitizen(parent, age, region) {
+    const r = this.rng;
+    if (region == null) region = parent ? parent.region : Math.floor(r() * NR);
     const c = {
       id: this.nextId++, name: SYL1[Math.floor(r() * SYL1.length)] + SYL2[Math.floor(r() * SYL2.length)],
-      age, region, x: R.x + Math.cos(a) * d, y: R.y + Math.sin(a) * d * 0.9,
+      age, region, home: -1,   // home: their spot on the map (a child keeps the family home)
       cls: 'worker', firm: 'big', employed: true, jailed: 0,
       skill: Math.exp(r.gauss() * 0.35), wealthF: Math.exp(r.gauss() * 0.6),
       values: new Float32Array(NN), needs: new Float32Array(NN),
-      w: new Float32Array(NP), trend: 0, q: new Float32Array(NA * NF), feat: new Float32Array(NF), trust: {}, memory: new Float32Array(NI).fill(NaN),
+      w: new Float32Array(NW), trend: 0, judge: new Float32Array(NI), abroad: 0.55 + r.gauss() * 0.05, q: new Float32Array(NA * NF), feat: new Float32Array(NF), trust: {}, memory: new Float32Array(NI).fill(NaN),
       sHist: new Float32Array(12), s: 0.5, sRef: 0.5, income: 0, net: 0, incSmooth: 0,
       action: 0, fav: this.regime, favScore: 0, lastVote: null, voteIntent: null, born: this.month,
-      parentId: parent ? parent.id : null, arrests: 0, revolutions: 0,
+      parentId: parent ? parent.id : null, arrests: 0, revolutions: 0, immigrant: false,
     };
     for (let k = 0; k < NN; k++) c.values[k] = clamp(1 + r.gauss() * 0.4, 0.2, 1.8);
-    for (let p = 0; p < NP; p++) c.w[p] = r.gauss() * 0.03;               // hunches, not knowledge
+    for (let p = 0; p < NW; p++) c.w[p] = r.gauss() * 0.03;               // hunches, not knowledge
     for (let a = 1; a < NA; a++) c.q[a * NF] = -ACTION_COST[a];   // wary of trouble at first
     if (parent) {
       // children grow up hearing their parent's views and stories, but make up their own minds
-      for (let p = 0; p < NP; p++) c.w[p] = parent.w[p] * 0.6 + r.gauss() * 0.05;
+      for (let p = 0; p < NW; p++) c.w[p] = parent.w[p] * 0.6 + r.gauss() * 0.05;
+      c.abroad = parent.abroad;
       for (let k = 0; k < NI; k++) c.memory[k] = parent.memory[k];
       for (let k = 0; k < NN; k++) c.values[k] = clamp(parent.values[k] * 0.5 + c.values[k] * 0.5, 0.2, 1.8);
       for (let i = 0; i < c.q.length; i++) c.q[i] = c.q[i] * 0.7 + parent.q[i] * 0.3;
@@ -328,7 +354,7 @@ class World {
     const demand = Math.pow(W.g, 0.4 + P[L.trade]) * (W.austerity > 0 ? 0.93 : 1);
     const reg = P[L.regulation], tax = P[L.tax];
     const E = (1 - 0.4 * W.C) * (1 + 0.06 * reg - 0.16 * reg * reg) * (1 + 0.16 * (P[L.trade] - 0.5)) * demand
-      * (1 - 0.1 * Math.max(0, tax - 0.45)) * (1 - 0.6 * W.strikeFrac - 1.2 * W.riotFrac);
+      * (1 - 0.1 * Math.max(0, tax - 0.45)) * (1 - 0.6 * W.strikeFrac - 1.2 * W.riotFrac) * (W.war ? 0.94 : 1);
     let u = 0.045 + 0.16 * Math.max(0, P[L.wage] - 0.35) * (1 - sh.state) + 0.05 * reg * reg + 0.5 * Math.max(0, 1 - demand)
       - 0.06 * sh.state - 0.025 * sh.coop + 0.03 * Math.max(0, tax - 0.5);
     return { lam, E, uStar: clamp(u, 0.01, 0.45), effState: 1 - 0.35 * Math.pow(sh.state, 1.5), effCoop: 0.93 };
@@ -412,6 +438,7 @@ class World {
     }
     const Ytot = outBig + outState + outCoop + outSmall;
     spending += this.debt * 0.03 / 12;          // interest
+    if (this.war) spending += 0.06 * Ytot;      // fighting a war is expensive
     this.debt = Math.max(0, this.debt + spending - revenue);
     this.debtRatio = this.debt / Math.max(1, 12 * Ytot);
     this.budget = { revenue, spending };
@@ -479,7 +506,8 @@ class World {
     n[0] = 1 - Math.exp(-net / REF);
     const pollution = (1 - P[L.regulation]) * REGIONS[c.region].industry * 0.5;
     n[1] = clamp(0.2 + 0.45 * P[L.services] + 0.25 * n[0] - pollution, 0, 1);
-    n[2] = clamp(1 - crime * 1.5, 0, 1);
+    const war = !snap && this.war ? 0.15 + 0.15 * Math.max(0, -this.war.score) : 0;   // bombs, shortages, fear of losing
+    n[2] = clamp(1 - crime * 1.5 - war, 0, 1);
     n[3] = jailed ? 0 : clamp(Math.pow(P[L.liberty], 0.7) - 0.3 * P[L.police] * (1 - P[L.liberty]), 0, 1);
     n[4] = clamp(1 - gini * 1.3 - 0.6 * (snap ? snap.C : this.C), 0, 1);
     let d;
@@ -531,8 +559,9 @@ class World {
     for (const c of cits) { regPop[c.region]++; regSame[c.region][c.action]++; if (c.action) regAct[c.region]++; }
     const judge = new Float32Array(NI), feat = new Float32Array(NF);
     const hist = this.Phist, Pold = hist.length >= 12 ? hist[hist.length - 12] : null;
-    let dP2 = 0; const dP = new Float32Array(NP);
-    if (Pold) for (let p = 0; p < NP; p++) { dP[p] = P[p] - Pold[p]; dP2 += dP[p] * dP[p]; }
+    // what changed in a year: every law, and whether we are at war
+    let dP2 = 0; const dP = new Float32Array(NW);
+    if (Pold) for (let p = 0; p < NW; p++) { dP[p] = (p < NP ? P[p] : this.war ? 1 : 0) - Pold[p]; dP2 += dP[p] * dP[p]; }
     const propaganda = 0.15 * (1 - P[L.liberty]) * P[L.police];
     let sumS = 0;
 
@@ -544,10 +573,10 @@ class World {
       const sYearAgo = c.sHist[this.month % 12];
       // (trend: "life just keeps getting better/worse", so not every law that rose gets the credit)
       if (Pold && dP2 > 4e-4) {
-        let pred = c.trend; for (let p = 0; p < NP; p++) pred += c.w[p] * dP[p];
+        let pred = c.trend; for (let p = 0; p < NW; p++) pred += c.w[p] * dP[p];
         const err = (c.s - sYearAgo) - pred;
         const lr = 0.1 / (dP2 + 0.02 + 0.01);
-        for (let p = 0; p < NP; p++) c.w[p] = clamp(c.w[p] + lr * err * dP[p], -3, 3);
+        for (let p = 0; p < NW; p++) c.w[p] = clamp(c.w[p] + lr * err * dP[p], -3, 3);
         c.trend += lr * err * 0.01;
       }
       c.sHist[this.month % 12] = c.s;
@@ -558,11 +587,12 @@ class World {
       // ----- trust: how is life going while each party governs?
       for (const party of this.parties) {
         let t = c.trust[party.id] || 0;
-        if (party.govShare > 0) t += 4 * (c.s - sPrev) * party.govShare;
+        if (party.govShare > 0) t += 4 * (c.s - sPrev) * party.govShare - 0.003 * party.govShare;   // governing wears a party out
         c.trust[party.id] = clamp(t * 0.99, -1, 1);
       }
       // ----- which system they would choose
       this.judgeSystems(c, judge);
+      c.judge.set(judge);
       let fav = this.regime, best = judge[this.regime];
       for (let k = 0; k < NI; k++) if (judge[k] > best) { best = judge[k]; fav = k; }
       c.fav = fav; c.favScore = best - judge[this.regime];
@@ -574,7 +604,9 @@ class World {
       if (this.month > 0 && !c._arrested) {
         const same = a ? regSame[c.region][a] / Math.max(1, regPop[c.region]) : 0;
         // reward: did life get better? Acting also answers anger, solidarity and ideals (fighting for a system they believe in)
-        let reward = 8 * (c.s - sPrev) + (a ? 0.6 * (0.45 - c.s) + 0.15 * same - ACTION_COST[a] + (c.fav !== this.regime ? IDEALS[a] * clamp(c.favScore, 0, 1) : 0) : 0);
+        // (taking up arms feels far less justified where people can speak freely and change things peacefully)
+        const ideal = c.fav !== this.regime ? IDEALS[a] * clamp(c.favScore, 0, 1) * (a === 3 ? 1 - 0.75 * P[L.liberty] : 1) : 0;
+        let reward = 8 * (c.s - sPrev) + (a ? 0.6 * (0.45 - c.s) + 0.15 * same - ACTION_COST[a] + ideal : 0);
         this._learnAction(c, a, reward, f);
       }
       c._arrested = false;
@@ -588,7 +620,8 @@ class World {
         const o = cits[Math.floor(r() * cits.length)];
         if (o !== c && o.region === c.region) {
           const k = o.cls === c.cls ? 0.02 : 0.005;
-          for (let p = 0; p < NP; p++) c.w[p] += k * (o.w[p] - c.w[p]);
+          for (let p = 0; p < NW; p++) c.w[p] += k * (o.w[p] - c.w[p]);
+          c.abroad += k * (o.abroad - c.abroad);
           for (let j = 0; j < NI; j++) if (Number.isNaN(c.memory[j]) && !Number.isNaN(o.memory[j]) && r() < 0.3) c.memory[j] = o.memory[j];
         }
       }
@@ -648,7 +681,7 @@ class World {
       this.log(`${coup ? 'Coup!' : 'Revolution!'} ${pct}% of citizens rose up${offRebels ? `, joined by ${offPct}% of police and soldiers` : ''}. The ${IDEOLOGIES[this.regime].name} falls. The rebels want ${IDEOLOGIES[to].name}.`, 'revolution');
       for (const c of cits) if (c.action === 3) c.revolutions++;
       this._changeRegime(to, coup ? 'coup' : 'revolution');
-    } else if (failing && riot >= n * 0.03 && this.month - (this.lastFailLog || -99) >= 12) {
+    } else if (failing && riot >= n * 0.03 && this.month - (this.lastFailLog || -99) >= (riot >= n * 0.06 ? 12 : 60)) {
       this.lastFailLog = this.month;
       this.log(`An uprising of ${riot} people fails: ${Math.round(defence)} strength defends the government against ${Math.round(attack)}.`, 'repress');
     }
@@ -678,11 +711,18 @@ class World {
         if (rc) rc.cls = 'official';
       }
       for (const c of this.citizens) { c.action = 0; c.jailed = 0; }
+    } else if (how === 'reform') {
+      // a peaceful change: property is reformed gradually, prisoners are freed, little is destroyed
+      const st = this._shareTargets(this.P);
+      for (const k in st) this.shares[k] += (st[k] - this.shares[k]) * 0.2;
+      this.A *= 0.98;
+      for (const c of this.citizens) c.jailed = 0;
     }
+    this.amendment = null; this.directRun = null; this.pactRun = null;
     this._reconcileClasses(false);
     for (const party of this.parties) party.govShare = 0;
     if (d.rule === 'elections') {
-      if (IDEOLOGIES[from].rule !== 'elections') {
+      if (IDEOLOGIES[from].rule !== 'elections' || !this.parties.length) {
         this.deadParties.push(...this.parties); this.parties = [];
         for (let k = 0; k < 3; k++) this._foundParty(null);
         this.log('Parties are allowed again. New ones form; nobody knows yet which promises win.', 'party');
@@ -705,15 +745,31 @@ class World {
     x[4] = clamp(this.debtRatio - 0.6, -1, 2); x[5] = (this.protestFrac + this.strikeFrac + this.riotFrac) * 4;
     x[6] = this.meanS * 4 - 2; x[7] = own * 3 - 0.5; x[8] = inGov ? 1 : -1;
     x[9] = Number.isFinite(this.nextElection) ? clamp(1 - (this.nextElection - this.month) / 24, -1, 1) : 0;
+    x[10] = this.war ? 1 : -1; x[11] = this.war ? this.war.score : 0;
     return x;
   }
   _platform(params, inputs) {
     const net = this._net || (this._net = new Network(BRAIN_SIZES));
     net.params.set(params);
-    const o = net.forward(inputs), d = this.ideology, out = new Float32Array(NP);
+    const o = net.forward(inputs), d = this.ideology, out = new Float32Array(NP + 2);
     for (let p = 0; p < NP; p++) out[p] = clamp((o[p] + 1) / 2, d.lo[p], d.hi[p]);
+    out[OUT_CHANGE] = (o[OUT_CHANGE] + 1) / 2; out[OUT_WAR] = (o[OUT_WAR] + 1) / 2;
     return out;
   }
+  /** The system a set of promises comes closest to (other than the one in power). */
+  aimOf(plat) {
+    if (plat._aimFor === this.regime) return plat._aim;
+    let best = -1, bd = Infinity;
+    for (let k = 0; k < NI; k++) {
+      if (k === this.regime) continue;
+      let dd = 0; for (let p = 0; p < NP; p++) dd += (plat[p] - IDEOLOGIES[k].typical[p]) ** 2;
+      if (dd < bd) { bd = dd; best = k; }
+    }
+    plat._aimFor = this.regime; plat._aim = best;
+    return best;
+  }
+  pushesChange(plat) { return plat[OUT_CHANGE] > 0.7; }
+  wantsWar(plat) { return plat[OUT_WAR] > 0.7; }
   _freshBrain(ideal) {
     const net = Network.random(BRAIN_SIZES, this.rng);
     const params = net.params;
@@ -722,6 +778,9 @@ class World {
       const n0 = BRAIN_SIZES[0], n1 = BRAIN_SIZES[1], base = n1 * (n0 + 1);
       for (let j = 0; j < NP; j++) params[base + j * (n1 + 1) + n1] = Math.atanh(clamp(2 * ideal[j] - 1, -0.95, 0.95));
     }
+    // the two big choices start leaning "no"
+    const n0 = BRAIN_SIZES[0], n1 = BRAIN_SIZES[1], base = n1 * (n0 + 1);
+    for (const j of [OUT_CHANGE, OUT_WAR]) params[base + j * (n1 + 1) + n1] = -0.6;
     return params;
   }
   _mutate(params, sigma) {
@@ -730,14 +789,15 @@ class World {
     return g;
   }
 
-  _foundParty(ideal) {
+  _foundParty(ideal, region = null) {
     if (this.parties.length >= 8) return null;
     const r = this.rng;
     const used = new Set(this.parties.map(p => p.color));
     let color = PARTY_COLORS.find(c => !used.has(c)) || PARTY_COLORS[this.partyCount % 8];
     let name;
     for (let tries = 0; tries < 20; tries++) {
-      name = (r() < 0.25 ? 'The ' : '') + PARTY_A[Math.floor(r() * PARTY_A.length)] + ' ' + PARTY_B[Math.floor(r() * PARTY_B.length)];
+      name = region != null ? `${REGIONS[region].name} ${['League', 'First', 'Movement', 'Union', 'Alliance', 'Party'][Math.floor(r() * 6)]}`
+        : (r() < 0.25 ? 'The ' : '') + PARTY_A[Math.floor(r() * PARTY_A.length)] + ' ' + PARTY_B[Math.floor(r() * PARTY_B.length)];
       if (![...this.parties, ...this.deadParties].some(p => p.name === name)) break;
     }
     const brain = this._freshBrain(ideal);
@@ -746,7 +806,7 @@ class World {
       pool: [brain, ...Array.from({ length: 5 }, () => this._mutate(brain, 0.15))], poolScores: [],
       platform: this._platform(brain, this._inputs(0.2, false)), seats: 0, votes: 0, share: 0, govShare: 0, money: 0,
       generation: 0, history: [], weak: -1, conscience: new Float32Array(3 * 2), decisions: [], lastShare: 0, scandals: 0, bribes: 0,
-      donors: {},
+      donors: {}, region,   // region: a regional party only stands in its home region
     };
     party.family = familyOf(party.platform);
     for (const c of this.citizens) c.trust[party.id] = r.gauss() * 0.1;
@@ -768,7 +828,18 @@ class World {
 
   /* ---------------- polls and elections ---------------- */
   _utility(c, party, platform) {
-    return HOPE * this.expect(c, platform) + 0.6 * (c.trust[party.id] || 0) + (c.lastVote === party.id ? 0.15 : 0);
+    if (party.region != null && party.region !== c.region) return -Infinity;   // not on the ballot here
+    let u = HOPE * this.expect(c, platform) + 0.6 * (c.trust[party.id] || 0) + (c.lastVote === party.id ? 0.15 : 0);
+    u += 0.3 * taste(c.id, party.id);                                          // personal taste: a candidate they like, a family habit
+    if (party.region != null) u += 0.25;                                       // "one of us"
+    // campaigning to change the whole system: welcome to those who want that system, alarming to the rest
+    if (this.pushesChange(platform)) u += 0.5 * clamp(c.judge[this.aimOf(platform)] - c.judge[this.regime], -1, 1);
+    return u + HOPE * this.warAppeal(c, platform);
+  }
+  /** War or peace, judged by what a citizen has learned about war (starting one feels risky). */
+  warAppeal(c, plat) {
+    const dWar = (this.wantsWar(plat) ? 1 : 0) - (this.war ? 1 : 0);
+    return dWar ? c.w[W_WAR] * dWar - (dWar > 0 ? 0.08 : 0) : 0;
   }
   _poll(sample, platforms) {
     const counts = new Float32Array(this.parties.length);
@@ -783,9 +854,9 @@ class World {
     for (let k = 0; k < counts.length; k++) counts[k] /= Math.max(1, sample.length);
     return counts;
   }
-  _sample(n) {
-    const out = [], cits = this.citizens;
-    for (let i = 0; i < n; i++) out.push(cits[Math.floor(this.rng() * cits.length)]);
+  _sample(n, region = null) {
+    const cits = region == null ? this.citizens : this.citizens.filter(c => c.region === region), out = [];
+    for (let i = 0; i < n && cits.length; i++) out.push(cits[Math.floor(this.rng() * cits.length)]);
     return out;
   }
   /** Monthly opinion poll (what people would vote for today), for the page. */
@@ -793,12 +864,13 @@ class World {
     if (!this.parties.length) { for (const c of this.citizens) c.voteIntent = null; return; }
     const shares = new Float32Array(this.parties.length);
     for (const c of this.citizens) {
-      let best = 0, bu = -Infinity;
+      let best = -1, bu = -Infinity;
       for (let k = 0; k < this.parties.length; k++) {
         const u = this._utility(c, this.parties[k], this.parties[k].platform);
         if (u > bu) { bu = u; best = k; }
       }
-      c.voteIntent = this.parties[best].id; shares[best]++;
+      c.voteIntent = best >= 0 ? this.parties[best].id : null;
+      if (best >= 0) shares[best]++;
     }
     this.parties.forEach((p, k) => { p.poll = shares[k] / this.citizens.length; });
   }
@@ -807,7 +879,7 @@ class World {
     const r = this.rng;
     // 1. citizens nobody speaks for may found a party
     this._maybeFoundParty();
-    const sample = this._sample(160);
+    const national = this._sample(160);
     const platformsNow = this.parties.map(p => p.platform);
     // 2. primaries: each party's candidates are tested in a poll; the best one leads
     for (let k = 0; k < this.parties.length; k++) {
@@ -815,6 +887,7 @@ class World {
       const inputs = this._inputs(party.share, party.govShare > 0);
       const members = this.citizens.filter(c => c.lastVote === party.id);
       const msample = members.length > 60 ? members.slice(0, 60) : members;
+      const sample = party.region != null ? this._sample(160, party.region) : national;   // regional parties poll at home
       party.poolScores = party.pool.map(params => {
         const plat = this._platform(params, inputs);
         const plats = platformsNow.slice(); plats[k] = plat;
@@ -844,7 +917,7 @@ class World {
       }
     }
     // 4. voting day
-    const votes = new Float32Array(this.parties.length);
+    const votes = new Float32Array(this.parties.length), regTurnout = new Float32Array(NR);
     let turnout = 0;
     for (const c of this.citizens) {
       if (c.jailed) continue;
@@ -855,18 +928,20 @@ class World {
       }
       const care = 0.45 + clamp(bu - second, 0, 0.4) + 0.15 * c.age / 90;
       if (best < 0 || r() > care) continue;
-      votes[best]++; turnout++; c.lastVote = this.parties[best].id;
+      votes[best]++; turnout++; regTurnout[c.region]++; c.lastVote = this.parties[best].id;
     }
-    // 5. seats (largest averages, 101 seats, 4% threshold)
+    // 5. seats (largest averages, 101 seats, 4% threshold; a regional party with 20% at home gets in anyway)
     const shares = Array.from(votes, v => v / Math.max(1, turnout));
     const seats = new Int32Array(this.parties.length);
+    const inParl = this.parties.map((p, k) => shares[k] >= 0.04 || (p.region != null && votes[k] / Math.max(1, regTurnout[p.region]) >= 0.2));
     for (let s = 0; s < 101; s++) {
       let bk = -1, bq = -1;
-      for (let k = 0; k < votes.length; k++) if (shares[k] >= 0.04) { const q = votes[k] / (seats[k] + 1); if (q > bq) { bq = q; bk = k; } }
+      for (let k = 0; k < votes.length; k++) if (inParl[k]) { const q = votes[k] / (seats[k] + 1); if (q > bq) { bq = q; bk = k; } }
       if (bk < 0) break; seats[bk]++;
     }
     this.parties.forEach((p, k) => {
       p.lastShare = p.share; p.share = shares[k]; p.seats = seats[k]; p.votes = votes[k];
+      p.homeShare = p.region != null ? votes[k] / Math.max(1, regTurnout[p.region]) : null;
       p.history.push([this.month, shares[k], seats[k]]);
     });
     // 6. coalition: biggest party gathers the closest partners until it has a majority
@@ -909,6 +984,81 @@ class World {
       this.log(`${party.name} folds after two elections below 3%.`, 'party');
     }
     this.nextElection = this.month + 48;
+    // 9. war or peace, if the new government wants it
+    this._warPolicy();
+    // 10. changing the system itself
+    this._constitution();
+  }
+
+  /* ---------------- changing the system peacefully (deliberately hard) ----------------
+     Elections: parties holding two-thirds of the seats must campaign for the same new system,
+     in two parliaments in a row, and then 60% of voters (with at least half turning out) must say yes. */
+  _constitution() {
+    const bloc = new Float32Array(NI);
+    for (const p of this.parties) if (p.seats > 0 && this.pushesChange(p.platform)) bloc[this.aimOf(p.platform)] += p.seats;
+    let to = -1;
+    for (let k = 0; k < NI; k++) if (bloc[k] >= 67 && (to < 0 || bloc[k] > bloc[to])) to = k;
+    const a = this.amendment;
+    if (to < 0) {
+      if (a) this.log(`The push to make Veyland a ${IDEOLOGIES[a.target].name.toLowerCase()} loses its two-thirds majority. The amendment lapses.`, 'reform');
+      this.amendment = null;
+      return;
+    }
+    if (!a || a.target !== to) {
+      this.amendment = { target: to, month: this.month, seats: bloc[to] };
+      this.log(`First vote: ${bloc[to]} of 101 members vote to make Veyland a ${IDEOLOGIES[to].name.toLowerCase()}. It needs two-thirds again after the next election, then 60% in a referendum.`, 'reform');
+      return;
+    }
+    this.log(`Second vote: ${bloc[to]} of 101 members again back ${IDEOLOGIES[to].name}. The question goes to a referendum.`, 'reform');
+    this._referendum(to);
+  }
+  _referendum(to) {
+    let yes = 0, no = 0;
+    for (const c of this.citizens) {
+      if (c.jailed) continue;
+      const d = c.judge[to] - c.judge[this.regime];
+      if (this.rng() > 0.5 + clamp(Math.abs(d), 0, 0.4)) continue;   // people who care more turn out more
+      if (d > 0) yes++; else no++;
+    }
+    const n = yes + no, share = yes / Math.max(1, n), turnout = n / this.citizens.length;
+    this.amendment = null;
+    const res = `${Math.round(share * 100)}% yes, ${Math.round(turnout * 100)}% turnout`;
+    this.referendums = this.referendums || [];
+    this.referendums.push({ month: this.month, target: to, from: this.regime, share, turnout, passed: share >= 0.6 && turnout >= 0.5 });
+    if (share >= 0.6 && turnout >= 0.5) {
+      this.log(`Referendum passes (${res}). Veyland peacefully becomes a ${IDEOLOGIES[to].name.toLowerCase()}.`, 'reform');
+      this._changeRegime(to, 'reform');
+      return true;
+    }
+    this.log(`Referendum on ${IDEOLOGIES[to].name} fails (${res}; it needed 60% yes). The system stays.`, 'reform');
+    return false;
+  }
+  /** Councils and assemblies: two-thirds must want the same new system for two years. Dictatorships:
+      a negotiated handover only when most police and most people want the same system and the regime is very unpopular. */
+  _peacefulPressure() {
+    const d = this.ideology, cits = this.citizens;
+    const all = new Float32Array(NI), off = new Float32Array(NI);
+    let nAll = 0, nOff = 0;
+    for (const c of cits) {
+      if (d.rule === 'councils' && c.cls === 'owner') continue;
+      nAll++; all[c.fav]++;
+      if (c.cls === 'official') { nOff++; off[c.fav]++; }
+    }
+    let k = -1; for (let j = 0; j < NI; j++) if (j !== this.regime && (k < 0 || all[j] > all[k])) k = j;
+    if (d.rule === 'councils' || d.rule === 'assembly') {
+      const ok = all[k] / Math.max(1, nAll) >= 2 / 3;
+      // (checked every three months)
+      this.directRun = ok ? { target: k, months: this.directRun && this.directRun.target === k ? this.directRun.months + 3 : 3 } : null;
+      if (this.directRun && this.directRun.months === 3) this.log(`Two-thirds of voters now want ${IDEOLOGIES[k].name}. If that lasts two years there will be a referendum.`, 'reform');
+      if (this.directRun && this.directRun.months >= 24) this._referendum(k);
+    } else if (this.faction) {
+      const ok = off[k] / Math.max(1, nOff) >= 0.6 && all[k] / Math.max(1, nAll) >= 0.55 && this.faction.approval < 0.35;
+      this.pactRun = ok ? { target: k, months: this.pactRun && this.pactRun.target === k ? this.pactRun.months + 3 : 3 } : null;
+      if (this.pactRun && this.pactRun.months >= 12) {
+        this.log(`Round-table talks: with its own police and most people wanting ${IDEOLOGIES[k].name}, the ${this.faction.name} agrees to hand over power peacefully.`, 'reform');
+        this._changeRegime(k, 'reform');
+      }
+    }
   }
 
   _maybeFoundParty() {
@@ -919,18 +1069,27 @@ class World {
       let mag = 0; for (let q = 0; q < NP; q++) mag += Math.abs(c.w[q]);
       return best < 0.02 && mag > 0.6;
     });
-    if (lonely.length < this.citizens.length * 0.15) return;
+    // lonely people concentrated in one region found a regional party
+    const byReg = new Float32Array(NR), pop = new Float32Array(NR);
+    for (const c of this.citizens) pop[c.region]++;
+    for (const c of lonely) byReg[c.region]++;
+    let reg = -1;
+    const regional = this.parties.filter(p => p.region != null).length;
+    for (let k = 0; k < NR; k++) if (regional < 2 && byReg[k] >= 25 && byReg[k] >= 0.5 * pop[k] && !this.parties.some(p => p.region === k)
+      && (reg < 0 || byReg[k] / pop[k] > byReg[reg] / pop[reg])) reg = k;
+    if (lonely.length < this.citizens.length * 0.15 && reg < 0) return;
     this.lastFounding = this.month;
-    const founders = lonely.slice(0, 40);
+    const founders = (reg >= 0 ? lonely.filter(c => c.region === reg) : lonely).slice(0, 40);
     const ideal = new Float32Array(NP);
     for (let p = 0; p < NP; p++) {
-      let s = 0; for (const c of founders) s += Math.tanh(c.w[p]);
+      let s = 0; for (const c of founders) s += Math.tanh(c.w[p] * 5);
       ideal[p] = clamp(this.P[p] + 0.35 * s / founders.length, 0.02, 0.98);
     }
-    const party = this._foundParty(ideal);
+    const party = this._foundParty(ideal, reg >= 0 ? reg : null);
     if (party) {
       for (const c of founders) c.trust[party.id] = 0.3;
-      this.log(`${lonely.length} citizens feel nobody speaks for them. They found ${party.name}.`, 'party');
+      this.log(reg >= 0 ? `${byReg[reg]} people in ${REGIONS[reg].name} feel nobody speaks for their region. They found ${party.name}, which stands only there.`
+        : `${lonely.length} citizens feel nobody speaks for them. They found ${party.name}.`, 'party');
     }
   }
 
@@ -950,6 +1109,11 @@ class World {
       this._factionContest();
     }
     if (d.rule === 'elections' && this.month >= this.nextElection) this._election();
+    if (d.rule !== 'elections' && this.month % 3 === 0) {
+      this._peacefulPressure();
+      if (this.regime !== IDX[d.id]) return;     // the system just changed
+      if (d.rule === 'councils' || d.rule === 'assembly') this._warPolicy();
+    }
     // snap election when the streets are full for three months
     if (d.rule === 'elections' && !this.government.caretaker) {
       this.unrestRun = this.protestFrac + this.strikeFrac > 0.35 ? this.unrestRun + 1 : 0;
@@ -975,13 +1139,14 @@ class World {
       if (d.rule === 'experts') return this._forecast(plat, sample);
       // approval of their power base: police and soldiers count three times
       let s = 0, w = 0;
-      for (const c of sample) { const k = c.cls === 'official' ? 3 : 1; s += k * sig(6 * this.expect(c, plat)); w += k; }
+      for (const c of sample) { const k = c.cls === 'official' ? 3 : 1; s += k * sig(6 * (this.expect(c, plat) + this.warAppeal(c, plat))); w += k; }
       return s / w;
     });
     let bi = 0; f.poolScores.forEach((s, i) => { if (s > f.poolScores[bi]) bi = i; });
     f.brain = f.pool[bi];
     f.platform = this._platform(f.brain, inputs);
-    this.target.set(f.platform);
+    this.target.set(f.platform.subarray(0, NP));
+    this._warPolicy();
     let appr = 0; for (const c of sample) appr += c.favScore <= 0 ? 1 : 0;
     f.lastApproval = f.approval; f.approval = appr / sample.length;
     f.history.push([this.month, f.approval]);
@@ -1011,12 +1176,110 @@ class World {
     };
     const keep = new Float32Array(NN);
     let s = 0; for (const c of sample) { keep.set(c.needs); s += this._feel(c, snap); c.needs.set(keep); }
-    return s / sample.length + 0.5 * (T.E - 1);
+    return s / sample.length + 0.5 * (T.E - 1) - (this.wantsWar(plat) !== !!this.war ? (this.wantsWar(plat) ? 0.05 : -0.05) : 0);   // war costs output
+  }
+
+  /* ---------------- war with the neighbour ---------------- */
+  /** Does whoever governs want war? Parties and rulers learn it (a brain output); councils and assemblies vote on it. */
+  _govWantsWar() {
+    const d = this.ideology;
+    if (this.faction) return this.wantsWar(this.faction.platform);
+    if (d.rule === 'councils' || d.rule === 'assembly') {
+      let yes = 0, no = 0; for (const c of this.citizens) { if (c.w[W_WAR] > 0.03) yes++; else if (c.w[W_WAR] < -0.03) no++; }
+      return yes > no + this.citizens.length * 0.2;
+    }
+    if (!this.government || this.government.caretaker) return !!this.war && this.war.by === 'them';
+    let w = 0; for (const p of this.parties) if (p.govShare > 0) w += p.govShare * (this.wantsWar(p.platform) ? 1 : 0);
+    return w > 0.5;
+  }
+  _warPolicy() {
+    const want = this._govWantsWar();
+    if (!this.war && want && this.month - this.lastWarEnd >= 120) this._startWar('us');
+    else if (this.war && !want && this.war.months >= 6) {
+      // Veyland wants peace. Ostria agrees at once if it is losing, slowly if it is even, never while it is winning.
+      const sc = this.war.score;
+      if (sc > 0.2 || (sc > -0.3 && this.rng() < (this.war.by === 'us' ? 0.3 : 0.1))) this._endWar('peace');
+    }
+  }
+  _startWar(by) {
+    const gov = this.faction ? this.faction.name : this.parties.filter(p => p.govShare > 0).map(p => p.name).join(' + ') || 'the government';
+    this.war = { by, since: this.month, months: 0, score: 0, deaths: 0 };
+    // rallying round the flag: stronger when attacked
+    for (const c of this.citizens) {
+      if (!Number.isNaN(c.memory[this.regime])) c.memory[this.regime] += by === 'them' ? 0.03 : 0.01;
+      for (const p of this.parties) if (p.govShare > 0) c.trust[p.id] = clamp((c.trust[p.id] || 0) + (by === 'them' ? 0.15 : 0.04), -1, 1);
+    }
+    this.log(by === 'them' ? `War! ${NEIGHBOUR} invades Veyland. People rally behind the government.` : `War! ${gov} declares war on ${NEIGHBOUR}.`, 'war');
+  }
+  _endWar(how) {
+    const w = this.war, r = this.rng, year = 12 * this.Ytot;
+    let text;
+    if (how === 'victory') {
+      this.A *= w.by === 'us' ? 1.06 : 1.03; this.ostria.army *= 0.6;
+      for (const c of this.citizens) if (!Number.isNaN(c.memory[this.regime])) c.memory[this.regime] += 0.05;
+      text = `Victory over ${NEIGHBOUR} after ${Math.round(w.months / 12 * 10) / 10} years and ${w.deaths} dead.`;
+    } else if (how === 'defeat') {
+      this.A *= 0.94; this.debt += 0.25 * year;
+      for (const c of this.citizens) if (!Number.isNaN(c.memory[this.regime])) c.memory[this.regime] -= 0.1;
+      text = `Defeat! ${NEIGHBOUR} wins after ${w.deaths} Veylanders died. Veyland must pay reparations, and many blame the ${IDEOLOGIES[this.regime].name}.`;
+    } else {
+      if (w.score < -0.3) this.debt += 0.15 * year;
+      text = `Peace with ${NEIGHBOUR} after ${w.deaths} dead, on ${w.score > 0.3 ? 'good' : w.score < -0.3 ? 'harsh' : 'even'} terms.`;
+    }
+    this.wars.push({ from: w.since, to: this.month, by: w.by, how, deaths: w.deaths });
+    this.war = null; this.lastWarEnd = this.month;
+    this.log(text, 'war');
+  }
+  _warStep() {
+    const r = this.rng, P = this.P, o = this.ostria;
+    o.A *= 1 + (0.012 + 0.02 * r.gauss()) / 12;
+    o.army = clamp(o.army + 0.008 * r.gauss(), 0.2, 0.9);
+    // armies: spending on police & army, the economy behind it, numbers, morale, and turmoil at home
+    const ours = (0.3 + P[L.police]) * this.A * (this.citizens.length / this.N0) * (0.6 + 0.8 * this.meanS) * (1 - 2 * this.riotFrac);
+    const theirs = (0.3 + o.army) * o.A;
+    this.strength = { ours, theirs };
+    if (!this.war) {
+      // Ostria attacks rarely, more often when Veyland is weak or in turmoil
+      if (this.month - this.lastWarEnd >= 180) {
+        const p = 0.0004 * (1 + 3 * (this.riotFrac + this.protestFrac)) * clamp(theirs / ours, 0.3, 1.5);
+        if (r() < p) this._startWar('them');
+      }
+      return;
+    }
+    const w = this.war;
+    w.months++;
+    w.score = clamp(w.score + 0.04 * (ours - theirs) / (ours + theirs) + 0.02 * r.gauss(), -1, 1);
+    // soldiers fall, and some young conscripts
+    for (let i = 0; i < this.citizens.length; i++) {
+      const c = this.citizens[i];
+      const pDie = c.cls === 'official' ? 0.005 : (c.cls === 'worker' && c.age < 35) ? 0.001 : 0;
+      if (pDie && r() < pDie * (1 + Math.max(0, -w.score))) { this._replace(i); w.deaths++; }
+    }
+    if (w.score >= 1) this._endWar('victory');
+    else if (w.score <= -1) this._endWar('defeat');
   }
 
   /* ---------------- lobbies and corruption ---------------- */
   _lobbies() {
-    const r = this.rng, P = this.P, d = this.ideology;
+    const r = this.rng, P = this.P, d = this.ideology, pr = this.press;
+    // who owns the press: the state takes over where speech is not free; bought papers are slowly sold on
+    pr.state += (clamp(1.3 * (0.7 - P[L.liberty]), 0, 0.9) - pr.state) * 0.05;
+    let owned = 0;
+    for (const l of this.lobbies) { pr[l.id] *= 0.995; owned += pr[l.id]; }
+    const room = Math.max(0, 1 - pr.state) * 0.9;
+    if (owned > room) for (const l of this.lobbies) pr[l.id] *= room / owned;
+    owned = this.lobbies.reduce((t, l) => t + pr[l.id], 0);
+    pr.independent = Math.max(0, 1 - pr.state - owned);
+    // bought papers spin the news their owners' way
+    for (const l of this.lobbies) {
+      const sh = pr[l.id];
+      if (sh < 0.02 || !l.avgW) continue;
+      for (const c of this.citizens) {
+        if (r() > 0.3) continue;
+        c.w[l.top] += 0.006 * sh * l.dir;
+        if (l.friend) c.trust[l.friend] = clamp((c.trust[l.friend] || 0) + 0.004 * sh, -1, 1);
+      }
+    }
     for (const l of this.lobbies) {
       const members = this.citizens.filter(c => c.cls === l.cls && !c.jailed);
       const banned = (l.id === 'unions' && P[L.unions] < 0.1) || members.length === 0;
@@ -1026,7 +1289,7 @@ class World {
       if (this.month % 12 !== 4) continue;
       const sNow = members.reduce((s, c) => s + c.s, 0) / Math.max(1, members.length);
       // learn: did last year's choice help our members?
-      if (l.last) { const qi = l.last.s * 3 + l.last.a; l.q[qi] += 0.3 * ((sNow - l.sBefore) * 20 - l.q[qi]); }
+      if (l.last) { const qi = l.last.s * NLA + l.last.a; l.q[qi] += 0.3 * ((sNow - l.sBefore) * 20 - l.q[qi]); }
       l.sBefore = sNow;
       if (banned) { l.last = null; l.action = 'banned'; continue; }
       // what our members believe would help them most
@@ -1036,8 +1299,9 @@ class World {
       l.top = top; l.dir = Math.sign(avgW[top]) || 1; l.avgW = avgW;
       const st = (d.rule === 'elections' ? 2 : 0) + (P[L.liberty] > 0.5 ? 1 : 0);
       let a = 0;
-      if (r() < 0.15) a = Math.floor(r() * 3);
-      else for (let b = 1; b < 3; b++) if (l.q[st * 3 + b] > l.q[st * 3 + a]) a = b;
+      if (r() < 0.15) a = Math.floor(r() * NLA);
+      else for (let b = 1; b < NLA; b++) if (l.q[st * NLA + b] > l.q[st * NLA + a]) a = b;
+      if (a === 3 && room - owned < 0.02) a = 0;   // nothing left to buy
       if (a === 1 && d.rule !== 'elections') a = 2;
       l.last = { s: st, a };
       const amount = l.money * 0.8;
@@ -1047,8 +1311,15 @@ class World {
         let best = null, bv = -Infinity;
         for (const p of this.parties) { const v = l.dir * (p.platform[top] - P[top]) + 0.3 * p.share; if (v > bv) { bv = v; best = p; } }
         if (!best) { l.action = 'saved'; continue; }
-        best.money += amount; best.donors[l.id] = (best.donors[l.id] || 0) + 1; l.money -= amount;
+        best.money += amount; best.donors[l.id] = (best.donors[l.id] || 0) + 1; l.money -= amount; l.friend = best.id;
         l.action = `donated to ${best.name}`;
+        l.log.push([this.month, l.action]);
+      } else if (a === 3) {
+        // buy newspapers: a bigger slice of the press costs more
+        const price = 0.3 * Math.max(1, this.Ytot);
+        const gain = Math.min(room - owned, 0.25 * amount / price);
+        pr[l.id] += gain; owned += gain; pr.independent = Math.max(0, 1 - pr.state - owned); l.money -= amount;
+        l.action = `bought newspapers (now owns ${Math.round(pr[l.id] * 100)}% of the press)`;
         l.log.push([this.month, l.action]);
       } else {
         // offer a bribe to whoever holds power
@@ -1063,26 +1334,29 @@ class World {
           this.target[top] = clamp(this.target[top] + 0.03 * l.dir, 0, 1);
           taker.money += amount; l.money -= amount; taker.bribes++;
           this.C = Math.min(1, this.C + 0.03 * (1 - this.C));
-          this.pending.push({ month: this.month, taker, lobby: l, policy: top });
+          this.pending.push({ month: this.month, taker: taker === this.faction ? 'faction' : taker.id, takerName: taker.name, lobby: l.id, policy: top });
           l.action = `bribed ${taker.name} (${POLICIES[top].name} ${l.dir > 0 ? 'up' : 'down'})`;
         } else l.action = `bribe refused by ${taker.name}`;
         l.log.push([this.month, l.action]);
       }
       if (l.log.length > 40) l.log.shift();
     }
-    // the press digs
+    // the press digs: independent papers report anything; a lobby's own papers bury its bribes; state media never expose the rulers
     for (let i = this.pending.length - 1; i >= 0; i--) {
       const b = this.pending[i];
-      if (this.month - b.month > 48) { this.pending.splice(i, 1); continue; }
-      if (r() < 0.025 * P[L.liberty]) {
+      const taker = b.taker === 'faction' ? this.faction : this.parties.find(p => p.id === b.taker);
+      if (!taker || this.month - b.month > 48) { this.pending.splice(i, 1); continue; }
+      const rivals = this.lobbies.reduce((t, l) => t + (l.id === b.lobby ? 0 : pr[l.id]), 0);
+      if (r() < 0.03 * P[L.liberty] * (pr.independent + 0.7 * rivals)) {
         this.pending.splice(i, 1);
-        b.taker.scandals++;
-        const isParty = this.parties.includes(b.taker);
+        taker.scandals++;
+        const isParty = taker !== this.faction;
         for (const c of this.citizens) {
-          if (isParty) c.trust[b.taker.id] = clamp((c.trust[b.taker.id] || 0) - 0.3 - (c.lastVote === b.taker.id ? 0.1 : 0), -1, 1);
+          if (isParty) c.trust[taker.id] = clamp((c.trust[taker.id] || 0) - 0.3 - (c.lastVote === taker.id ? 0.1 : 0), -1, 1);
           else if (!Number.isNaN(c.memory[this.regime])) c.memory[this.regime] -= 0.03;
         }
-        this.log(`Scandal! The press reveals that ${b.taker.name} took money from the ${b.lobby.name} to change ${POLICIES[b.policy].name.toLowerCase()}.`, 'scandal');
+        const lob = this.lobbies.find(l => l.id === b.lobby);
+        this.log(`Scandal! The press reveals that ${taker.name} took money from the ${lob.name} to change ${POLICIES[b.policy].name.toLowerCase()}.`, 'scandal');
       }
     }
   }
@@ -1101,18 +1375,76 @@ class World {
       c.age += 1 / 12;
       if (c.age >= 65 && c.cls !== 'retired') { c.cls = 'retired'; c.employed = false; }
       const pDie = c.age < 60 ? 0.0003 : 0.0003 * Math.exp((c.age - 60) / 7);
-      if (r() < pDie) {
-        // a child from the same region takes their place
-        let parent = null;
-        for (let t = 0; t < 10 && !parent; t++) { const o = cits[Math.floor(r() * cits.length)]; if (o !== c && o.region === c.region) parent = o; }
-        const kid = this._newCitizen(parent || c, 18);
-        kid.cls = parent && (parent.cls === 'owner' || parent.cls === 'small') && r() < 0.7 ? parent.cls : 'worker';
-        if (c.cls === 'owner' && r() < 0.8) { kid.cls = 'owner'; kid.wealthF = c.wealthF; }   // inheritance
-        kid.x = c.x; kid.y = c.y; kid.employed = r() > this.u;
-        cits[i] = kid;
-      }
+      if (r() < pDie) this._replace(i);
     }
     if (this.month % 12 === 0) this._reconcileClasses(false);
+  }
+  /** Someone dies: a young person from a local family takes their place (and their home). */
+  _replace(i) {
+    const r = this.rng, cits = this.citizens, c = cits[i];
+    let parent = null;
+    for (let t = 0; t < 10 && !parent; t++) { const o = cits[Math.floor(r() * cits.length)]; if (o !== c && o.region === c.region) parent = o; }
+    const kid = this._newCitizen(parent || c, 18, c.region);
+    kid.cls = parent && (parent.cls === 'owner' || parent.cls === 'small') && r() < 0.7 ? parent.cls : 'worker';
+    if (c.cls === 'owner' && r() < 0.8) { kid.cls = 'owner'; kid.wealthF = c.wealthF; }   // inheritance
+    kid.home = c.home; kid.employed = r() > this.u;
+    cits[i] = kid;
+    return kid;
+  }
+
+  /** People leave when they believe life abroad is better (from letters home), and arrive when Veyland looks better. */
+  _migration() {
+    const r = this.rng, P = this.P;
+    const rep = P[L.police] * (1 - P[L.liberty]);
+    this.abroad = clamp(0.62 + 0.25 * (this.g - 1), 0.4, 0.75);
+    // letters from those who left arrive six months later, read by family and friends back home
+    for (let i = this.letters.length - 1; i >= 0; i--) {
+      const lt = this.letters[i];
+      if (lt.month > this.month) continue;
+      this.letters.splice(i, 1);
+      const home = this.citizens.filter(c => c.region === lt.region);
+      for (let k = 0; k < 6 && home.length; k++) { const c = home[Math.floor(r() * home.length)]; c.abroad += 0.3 * (lt.value - c.abroad); }
+    }
+    const leavers = [];
+    for (const c of this.citizens) {
+      if (P[L.liberty] > 0.5 && r() < 0.02) c.abroad += 0.1 * (this.abroad - c.abroad);   // a free press reports on life abroad
+      if (c.jailed || c.age > 60) continue;
+      const ties = 0.12 + 0.003 * (c.age - 18) + (c.cls === 'owner' || c.cls === 'small' ? 0.08 : 0) + (c.cls === 'official' ? 0.05 : 0);
+      const gap = c.abroad + 0.05 * (c.skill - 1) - c.sRef - ties;
+      if (gap <= 0 || r() > Math.min(0.03, gap * 0.15)) continue;
+      // closed borders: the police stop people fleeing
+      if (r() < rep * 0.8) {
+        if (r() < 0.5) { c.jailed = 6 + Math.floor(r() * 13); c.arrests++; this.caughtYear++; }
+        c.abroad -= 0.05;
+        continue;
+      }
+      leavers.push(c);
+    }
+    if (leavers.length && this.citizens.length - leavers.length >= 150) {
+      const gone = new Set(leavers);
+      for (const c of leavers) {
+        this.letters.push({ month: this.month + 6, region: c.region, value: clamp(this.abroad + 0.05 * (c.skill - 1) - 0.07 + 0.05 * r.gauss(), 0, 1) });
+        this.freeHomes.push(c.home);
+        this.departures.push({ month: this.month, home: c.home, region: c.region });
+      }
+      if (this.departures.length > 80) this.departures.splice(0, this.departures.length - 80);
+      this.citizens = this.citizens.filter(c => !gone.has(c));
+      this.emigYear += leavers.length;
+      if (leavers.length >= 5) this.log(`${leavers.length} people emigrate this month, hoping for a better life abroad.`, 'migration');
+    }
+    // immigrants: they know nothing about Veyland's politics yet
+    const pull = this.meanS - this.abroad - 0.03;
+    if (pull > 0 && P[L.liberty] > 0.3 && this.citizens.length < this.N0 * 1.15) {
+      for (let t = 0; t < 2; t++) if (r() < pull * 0.6) {
+        const w = [3, 2, 1, 3, 1, 1]; let x = r() * 11, region = 0;
+        while (x > w[region]) { x -= w[region]; region++; }
+        const c = this._newCitizen(null, 20 + r() * 20, region);
+        c.home = this.freeHomes.length ? this.freeHomes.pop() : this.nextHome++;
+        c.employed = false; c.immigrant = true; c.abroad = this.abroad;
+        c.s = this.abroad; c.sRef = this.abroad; c.sHist.fill(this.abroad);
+        this.citizens.push(c); this.immigYear++;
+      }
+    }
   }
 
   /* ---------------- one month ---------------- */
@@ -1121,9 +1453,12 @@ class World {
     this._economy();
     this._citizens();
     this._unrest();
+    this._migration();
     this._govern();
+    this._warStep();
     this._lobbies();
-    this.Phist.push(Float32Array.from(this.P));
+    const snapP = new Float32Array(NW); snapP.set(this.P); snapP[W_WAR] = this.war ? 1 : 0;
+    this.Phist.push(snapP);
     if (this.Phist.length > 24) this.Phist.shift();
     if (this.month % 3 === 0) this._voteIntents();
     if (this.month % 12 === 0) this._record();
@@ -1140,8 +1475,15 @@ class World {
       unrest: this.protestFrac + this.riotFrac + this.strikeFrac * 0.5, riot: this.riotFrac, crime, debt: this.debtRatio, C: this.C, regime: this.regime,
       favs: Array.from(favs, x => x / this.citizens.length), P: Array.from(this.P),
       polls: this.parties.map(p => ({ id: p.id, name: p.name, color: p.color, share: p.poll || 0 })),
+      pop: this.citizens.length, emig: this.emigYear, immig: this.immigYear, war: this.war ? this.war.score : null,
+      press: { ...this.press },
     });
+    this.emigYear = 0; this.immigYear = 0; this.caughtYear = 0;
     if (this.history.length > 600) this.history.shift();
+    if (this.deadParties.length > 30) this.deadParties.splice(0, this.deadParties.length - 30);
+    // forget trust in parties that no longer exist
+    const live = new Set(this.parties.map(p => p.id));
+    for (const c of this.citizens) for (const id of Object.keys(c.trust)) if (!live.has(id)) delete c.trust[id];
   }
 
   /* ---------------- shocks the viewer can cause (the world changes, nobody is told what to do) ---------------- */
@@ -1153,26 +1495,69 @@ class World {
       let died = 0;
       for (let i = 0; i < this.citizens.length; i++) {
         const c = this.citizens[i];
-        if (this.rng() < (c.age > 60 ? 0.12 : 0.02) * (1.3 - this.P[L.services])) { this.citizens[i] = this._newCitizen(c, 18); this.citizens[i].x = c.x; this.citizens[i].y = c.y; died++; }
+        if (this.rng() < (c.age > 60 ? 0.12 : 0.02) * (1.3 - this.P[L.services])) { this._replace(i); died++; }
       }
       this.A *= 0.97;
       this.log(`You caused an epidemic: ${died} people die. Good health care saves lives.`, 'shock');
+    } else if (kind === 'war') {
+      if (this.war) return;
+      this.ostria.army = Math.min(0.9, this.ostria.army + 0.2);
+      this.log(`You made ${NEIGHBOUR} arm itself and attack.`, 'shock');
+      this._startWar('them');
     }
+  }
+
+  /* ---------------- saving and loading a whole country ---------------- */
+  toJSON() {
+    const state = {};
+    for (const k of Object.keys(this)) if (k !== 'rng' && k !== '_net') state[k] = this[k];
+    state.rngState = this.rng.state();
+    return { format: SAVE_FORMAT, formatVersion: 1, app: 'Glass Box', savedAt: new Date().toISOString(), year: Math.floor(this.month / 12), world: encode(state) };
+  }
+  /** Returns { ok: true, world } or { ok: false, error }. */
+  static fromJSON(j) {
+    if (!j || j.format !== SAVE_FORMAT) return { ok: false, error: 'Not a Glass Box politics save file.' };
+    if (j.formatVersion !== 1) return { ok: false, error: `Unsupported formatVersion ${j.formatVersion}.` };
+    try {
+      const w = Object.create(World.prototype);
+      Object.assign(w, decode(j.world));
+      w.rng = makeRng(w.rngState); delete w.rngState;
+      if (!Array.isArray(w.citizens) || !w.citizens.length) throw new Error('no citizens');
+      return { ok: true, world: w };
+    } catch (e) { return { ok: false, error: 'The file is damaged: ' + e.message }; }
   }
 
   /* ---------------- for the page ---------------- */
   /** What the average citizen of a class (or everyone) believes each law does. */
   beliefs(filter) {
-    const out = new Float32Array(NP); let n = 0;
-    for (const c of this.citizens) if (!filter || filter(c)) { n++; for (let p = 0; p < NP; p++) out[p] += c.w[p]; }
-    for (let p = 0; p < NP; p++) out[p] /= Math.max(1, n);
+    const out = new Float32Array(NW); let n = 0;   // every law, then war
+    for (const c of this.citizens) if (!filter || filter(c)) { n++; for (let p = 0; p < NW; p++) out[p] += c.w[p]; }
+    for (let p = 0; p < NW; p++) out[p] /= Math.max(1, n);
     return out;
   }
   /** Q-values (how a citizen feels about each action) in their current situation. */
   actionValues(c) { return ACTIONS.map((_, a) => this._q(c, c.feat, a)); }
 }
 
-const api = { World, POLICIES, NEEDS, IDEOLOGIES, REGIONS, FAMILIES, ACTIONS, FEATURES, BRAIN_SIZES, INPUT_NAMES, PARTY_COLORS, familyOf, L };
+/* Save files: plain JSON. Typed arrays become base64 (exact, keeps NaN = "never lived under it"); Infinity becomes a string. */
+function encode(v) {
+  if (v instanceof Float32Array) return { $f32: toBase64(v) };
+  if (typeof v === 'number') return Number.isFinite(v) ? v : { $num: String(v) };
+  if (Array.isArray(v)) return v.map(encode);
+  if (v && typeof v === 'object') { const o = {}; for (const k of Object.keys(v)) o[k] = encode(v[k]); return o; }
+  return v;
+}
+function decode(v) {
+  if (Array.isArray(v)) return v.map(decode);
+  if (v && typeof v === 'object') {
+    if (typeof v.$f32 === 'string') return fromBase64(v.$f32);
+    if (typeof v.$num === 'string') return Number(v.$num);
+    const o = {}; for (const k of Object.keys(v)) o[k] = decode(v[k]); return o;
+  }
+  return v;
+}
+
+const api = { World, POLICIES, NEEDS, IDEOLOGIES, REGIONS, FAMILIES, ACTIONS, FEATURES, BRAIN_SIZES, INPUT_NAMES, OUTPUT_NAMES, LOBBY_ACTIONS, PARTY_COLORS, NEIGHBOUR, W_WAR, OUT_CHANGE, OUT_WAR, familyOf, L };
 if (typeof module !== 'undefined' && module.exports) module.exports = api;
 else root.Politics = api;
 })(typeof globalThis !== 'undefined' ? globalThis : this);
