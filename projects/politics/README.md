@@ -13,7 +13,8 @@ Open `index.html` (double-click works) or use the **Politics** card on the hub.
 - **Ostria**: the made-up neighbouring country. You can see its army next to Veyland's, the front line during a war, and past wars.
 - **Who owns the press**: independent papers, state media, and the papers each lobby has bought.
 - **Regions**: people, happiness, unemployment, emigrants, the leading party and the most wanted other system, per region.
-- **Shake things up**: cause a world slump, a bad harvest, an epidemic, an old debt or an attack by Ostria, then watch how people react.
+- **Make something happen**: a world slump, market crash, old debt, bad harvest, floods, earthquake, epidemic, an Ostrian attack, refugees, or the assassination of whoever leads. Then watch how people react.
+- **What happened**: the news log, filtered by Politics, Economy, Disasters, War & unrest, or People. Regions recently hit by a disaster are circled on the map.
 - **New country…**: start under any system, with a seed (same seed, same history).
 - **Save / Load…**: download the whole country as a `.json` file and open it again later. It continues exactly where it was.
 
@@ -49,6 +50,16 @@ Open `index.html` (double-click works) or use the **Politics** card on the hub.
 - **Regional parties**: when at least half of a region feels no party speaks for it, a regional party forms (at most two). It stands only at home and gets seats with 20% of its region's vote, even below the national 4% threshold.
 - **Emigration and immigration**: people leave when they believe life abroad beats life here by more than their ties (age, property, job). Dictatorships close borders and jail some who try to flee. Emigrants write home six months later, which shapes what their family believes. Immigrants arrive when Veyland looks better than abroad; they know nothing about its politics.
 - **Voters** also have a small fixed personal liking for each party, and governing slowly wears a party out, so one party rarely takes over for good.
+- **Party life**: 6 parties at the start, up to 8 at once. Every party (and every ruler) has a named **leader** with a charisma that wins or loses votes. Leaders resign after bad results or losing power, retire, have personal scandals (found by a free, independent press) and die. When a dictator dies or is assassinated, a **succession struggle** weakens the police for a while. Big parties **split** when many of their own voters feel abandoned; small, similar parties **merge**. **Coalitions can collapse** between elections (after a scandal, or when a partner's support slumps): the government then finds a new partner, carries on as a minority, or calls a snap election.
+- **Events** (chances depend on the laws, nobody is told how to react):
+  - mine disasters (Highcombe) and factory fires (Ironvale), likelier with weak safety rules;
+  - floods, earthquakes and epidemics. Good public services and welfare soften the blow, and the affected region feels it in safety and money for a while;
+  - market crashes (likelier after a boom when regulation is light), price shocks (worse with a lot of trade), world booms, inventions (likelier with good schools and free speech), one-off mineral wealth (with a rise in corruption);
+  - border incidents (raise the risk of war), trade deals with Ostria, sanctions on unfree countries, refugee waves;
+  - assassination attempts (likelier in turbulent times), sporting and cultural triumphs;
+  - news reports of recessions, boom years, crime waves, general strikes and mass protests.
+- **Debt**: when debt passes 90% of a year's output, lenders force taxes up and spending down, and taxes may not fall back for five years.
+- **Growth**: countries far behind the world's best methods catch up faster, more so with open trade and free speech.
 - **Life**: people age, retire at 65 and die; their children take their place, inheriting some beliefs and family stories.
 - All names (Veyland, its regions, parties and people) are made up.
 

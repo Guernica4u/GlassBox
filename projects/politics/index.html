@@ -142,6 +142,10 @@
   table.mini thead th { text-align: center; font-size: 11px; }
   table.mini td { text-align: center; border-radius: 3px; font: 11px var(--mono); height: 20px; }
 
+  .evtabs { display: flex; flex-wrap: wrap; gap: 4px; margin-bottom: 8px; }
+  .evtabs button { padding: 2px 8px; font-size: 11.5px; }
+  .leader { display: grid; grid-template-columns: auto 1fr; gap: 2px 10px; font-size: 13px; color: var(--muted); }
+  .leader b { color: var(--text); font-weight: 600; }
   #events { border-top: 1px solid var(--line); padding: 10px 14px; overflow-y: auto; flex: 0 0 28%; font-size: 12.5px; }
   #events .ev { display: grid; grid-template-columns: 46px 10px minmax(0, 1fr); gap: 6px; padding: 3px 0; color: var(--muted); }
   #events .ev .y { font: 11px var(--mono); color: var(--faint); padding-top: 2px; }
@@ -177,10 +181,14 @@
   <button id="skip10" title="Run 10 years as fast as possible">Skip 10 years</button>
   <button id="skip50">Skip 50 years</button>
   <span class="sep"></span>
-  <span class="label">Shake things up</span>
-  <span class="group">
-    <button data-shock="slump" title="World demand collapses">World slump</button><button data-shock="harvest" title="Farm incomes halve for a year">Bad harvest</button><button data-shock="epidemic" title="An illness kills mostly the old; good health care saves lives">Epidemic</button><button data-shock="debt" title="The state inherits a huge debt">Old debt</button><button data-shock="war" title="Ostria arms itself and invades">Ostria attacks</button>
-  </span>
+  <span class="label">Make something happen</span>
+  <select id="shockSel" title="Change the world, then watch how people react. Nobody is told what to do.">
+    <optgroup label="Economy"><option value="slump">World slump</option><option value="crash">Market crash</option><option value="debt">Old debt (120% of output)</option></optgroup>
+    <optgroup label="Disasters"><option value="harvest">Bad harvest</option><option value="flood">Floods in Redfield</option><option value="quake">Earthquake</option><option value="epidemic">Epidemic</option></optgroup>
+    <optgroup label="Abroad"><option value="war">Ostria attacks</option><option value="refugees">Refugees arrive</option></optgroup>
+    <optgroup label="Politics"><option value="assassin">Assassinate the leader in power</option></optgroup>
+  </select>
+  <button id="shockGo">Go</button>
   <span class="sep"></span>
   <button id="newBtn">New country…</button>
   <button id="saveBtn" title="Download this country as a file">Save</button>
@@ -201,6 +209,8 @@
       <p><b>Changing the system peacefully</b> is possible but very hard. Parties can campaign for a new system. If parties holding two-thirds of parliament back the same one in two elections running, there is a referendum, and 60% must say yes. Workers' councils and assemblies need two-thirds wanting the same system for two years. A dictatorship hands over power only if most of its own police and most people want the same system and it is very unpopular.</p>
       <p><b>War:</b> next door is <b>Ostria</b>, a made-up neighbour. It may attack when Veyland looks weak or torn apart. Parties and rulers can also choose war. Citizens learn whether war helps or hurts them, the same way they learn about laws. Soldiers die, the economy suffers, and a defeat can bring a government down.</p>
       <p><b>The press</b> can be bought. Lobbies may buy newspapers that spin the news their owners' way and bury their owners' scandals. Where speech is not free, the state runs the media and never exposes the rulers. <b>Regional parties</b> form when a region feels nobody speaks for it; they stand only at home. <b>Emigration:</b> people leave when they believe life abroad is better, judged from letters home by those who left. Dictatorships close the borders. Immigrants arrive when Veyland looks good, knowing nothing.</p>
+      <p><b>Real-life politics:</b> up to 8 parties at once, each with a named <b>leader</b> whose charisma wins or loses votes. Leaders resign after bad results, have scandals, grow old and die; when a dictator dies there is a succession struggle. Big parties can <b>split</b> when their own voters feel abandoned, small similar ones <b>merge</b>, and <b>coalitions can collapse</b> between elections.</p>
+      <p><b>Events</b> happen the way they do in real life, more or less likely depending on the laws: mine disasters and factory fires (likelier with weak safety rules), floods, earthquakes and epidemics (good public services soften them), market crashes (likelier after booms with light regulation), inventions (likelier with good schools and free speech), price shocks, border incidents, trade deals, sanctions on dictatorships, refugee waves, assassination attempts and sporting triumphs. Regions hit by a disaster are circled on the map.</p>
       <p>Click any dot, party, lobby or the ruler to <b>look inside their head</b>. <b>Save</b> downloads the whole country as a file; <b>Load</b> opens it again.</p>
     </div>
 
@@ -439,6 +449,13 @@ function drawMap() {
     const k = (now - l.t0) / 2500, x = (CX + (l.x - CX) * (1 + 1.2 * k)) * W, y = (CY + (l.y - CY) * (1 + 1.2 * k)) * H;
     ctx.globalAlpha = 1 - k; ctx.fillStyle = '#e8e6e1'; ctx.beginPath(); ctx.arc(x, y, rad * 0.8, 0, 7); ctx.fill(); ctx.globalAlpha = 1;
   }
+  // regions recently hit by a disaster
+  REGIONS.forEach((r, k) => {
+    const h = world.hurt ? world.hurt[k] : 0;
+    if (h < 0.08) return;
+    ctx.strokeStyle = `rgba(250,178,25,${Math.min(0.8, h)})`; ctx.lineWidth = 2 * dpr; ctx.setLineDash([4 * dpr, 4 * dpr]);
+    ctx.beginPath(); ctx.arc(r.x * W, r.y * H, (0.06 + 0.06 * h) * Math.min(W, H) * (1 + 0.05 * Math.sin(now / 300)), 0, 7); ctx.stroke(); ctx.setLineDash([]);
+  });
   // region names
   ctx.textAlign = 'center';
   for (const r of REGIONS) {
@@ -535,7 +552,7 @@ function drawParliament() {
 function renderRules() {
   const d = world.ideology, years = Math.floor((world.month - world.regimeSince) / 12);
   const how = { elections: 'Free elections every 4 years', party: 'One-party rule', experts: 'Rule by experts', councils: 'Workers’ councils', assembly: 'Direct democracy' }[d.rule];
-  const ruler = world.faction ? ` · <a href="#" data-sel="regime" style="color:var(--hue)">${esc(world.faction.name)}</a>` : '';
+  const ruler = world.faction ? ` · <a href="#" data-sel="regime" style="color:var(--hue)">${esc(world.faction.name)}</a>${world.faction.leader ? `, led by ${esc(world.faction.leader.name)}` : ''}${world.succession > 0 ? ' · <b style="color:#fab219">succession struggle</b>' : ''}` : '';
   $('regimeBox').innerHTML = `<h3 style="display:flex;gap:8px;align-items:center"><i style="width:12px;height:12px;border-radius:3px;background:${d.hue}"></i>${esc(d.name)}</h3>
     <p>${esc(how)}${ruler} · for ${years} year${years === 1 ? '' : 's'}. ${esc(d.blurb)}</p>`;
   const chip = $('regimeChip');
@@ -546,7 +563,8 @@ function renderRules() {
   $('plist').innerHTML = world.parties.slice().sort((a, b) => (b.seats - a.seats) || (b.poll || 0) - (a.poll || 0)).map(p => `
     <div class="pcard ${selected && selected.id === p.id ? 'sel' : ''}" data-party="${p.id}"><i style="background:${p.color}"></i>
       <span class="nm">${esc(p.name)}${gov.has(p.id) ? '<span class="gov">GOV</span>' : ''}${partyBadges(p)} <small>· ${esc(p.family)}</small></span>
-      <span class="num">${p.seats} seats · polls ${pct(p.poll || 0)}</span></div>`).join('');
+      <span class="num">${p.seats} seats · polls ${pct(p.poll || 0)}</span>
+      ${p.leader ? `<span></span><span class="hint" style="grid-column:2/4;margin-top:-2px">led by ${esc(p.leader.name)}${p.leader.charisma > 0.4 ? ' · charismatic' : p.leader.charisma < -0.4 ? ' · uninspiring' : ''}</span>` : ''}</div>`).join('');
   $('constBox').innerHTML = constitutionHTML();
   drawParliament();
 }
@@ -750,13 +768,23 @@ $('lobbies').addEventListener('click', e => { const el = e.target.closest('[data
 /* =============================================================================
    Events
 ============================================================================= */
-const EV_COLORS = { revolution: '#d03b3b', war: '#d03b3b', crisis: '#ec835a', shock: '#ec835a', election: '#3987e5', reform: '#e07a9b', scandal: '#fab219', party: '#199e70', repress: '#9085e9', migration: '#5a5f68', start: '#8a8f98', info: '#8a8f98' };
-let evShown = -1;
+const EV_COLORS = { revolution: '#d03b3b', war: '#d03b3b', crisis: '#ec835a', shock: '#ec835a', economy: '#ec835a', disaster: '#fab219', election: '#3987e5', politics: '#3987e5', leader: '#9085e9', reform: '#e07a9b', scandal: '#fab219', party: '#199e70', repress: '#9085e9', unrest: '#d03b3b', migration: '#5a5f68', news: '#199e70', start: '#8a8f98', info: '#8a8f98' };
+const EV_GROUPS = [
+  ['All', null], ['Politics', ['election', 'politics', 'leader', 'party', 'reform', 'scandal', 'start', 'info']],
+  ['Economy', ['economy', 'crisis', 'shock']], ['Disasters', ['disaster']],
+  ['War & unrest', ['war', 'revolution', 'repress', 'unrest']], ['People', ['migration', 'news']],
+];
+let evShown = -1, evFilter = 'All';
 function renderEvents() {
-  if (world.events.length === evShown && world.events.length < 400) return;
-  evShown = world.events.length;
-  $('events').innerHTML = '<div class="label" style="margin-bottom:6px">What happened</div>' + world.events.slice(-120).reverse().map(e =>
-    `<div class="ev ${['revolution', 'crisis', 'war', 'reform'].includes(e.kind) ? 'big' : ''}"><span class="y">Y${Math.floor(e.month / 12)}</span><i style="background:${EV_COLORS[e.kind] || '#8a8f98'}"></i><span>${esc(e.text)}</span></div>`).join('');
+  const key = world.events.length + evFilter;
+  if (key === evShown && world.events.length < 400) return;
+  evShown = key;
+  const kinds = EV_GROUPS.find(g => g[0] === evFilter)[1];
+  const list = world.events.filter(e => !kinds || kinds.includes(e.kind));
+  $('events').innerHTML = '<div class="label" style="margin-bottom:6px">What happened</div><div class="evtabs">' +
+    EV_GROUPS.map(([n]) => `<button data-evf="${n}" class="${n === evFilter ? 'on' : ''}">${n}</button>`).join('') + '</div>' +
+    (list.length ? '' : '<div class="hint">Nothing of this kind yet.</div>') + list.slice(-120).reverse().map(e =>
+    `<div class="ev ${['revolution', 'crisis', 'war', 'reform', 'disaster'].includes(e.kind) ? 'big' : ''}"><span class="y">Y${Math.floor(e.month / 12)}</span><i style="background:${EV_COLORS[e.kind] || '#8a8f98'}"></i><span>${esc(e.text)}</span></div>`).join('');
 }
 
 /* =============================================================================
@@ -843,6 +871,9 @@ function brainOwnerHTML(p, isParty) {
   return `<h3>${isParty ? `<i style="background:${p.color}"></i>` : ''}${esc(p.name)}</h3>
     <div class="sub">${isParty ? `${esc(p.family)} (where its promises have drifted) · founded year ${Math.floor(p.founded / 12)}${dead ? ' · <b>dissolved</b>' : ''}<br>${p.seats} seats · last vote ${pct(p.share)} · polls ${pct(p.poll || 0)}${gov ? ' · <b style="color:var(--hue)">in government</b>' : ''}`
       : `Rules Veyland · approval ${pct(p.approval)}`}<br>${p.generation} round${p.generation === 1 ? '' : 's'} of learning · ${Math.round(p.money).toLocaleString()} cr in the bank</div>
+    ${p.leader ? `<h4>Leader <small>charisma wins or loses votes; leaders resign after bad results, have scandals, grow old</small></h4>
+    <div class="leader"><span>Name</span><b>${esc(p.leader.name)}</b><span>Age</span><span>${Math.floor(p.leader.age)}</span><span>Leader since</span><span>year ${Math.floor(p.leader.since / 12)}</span></div>
+    <div class="hbars" style="margin-top:6px">${db('Charisma', p.leader.charisma, 1)}</div>` : ''}
     <h4>Big choices <small>two extra outputs of its brain; above 70% means yes</small></h4>
     <div class="hbars">${isParty ? hb('New system', p.platform[OUT_CHANGE], world.pushesChange(p.platform) ? '#e07a9b' : '#3a3f47', pct(p.platform[OUT_CHANGE]), 'campaign to change the whole system') : ''}${hb('Go to war', p.platform[OUT_WAR], world.wantsWar(p.platform) ? '#d03b3b' : '#3a3f47', pct(p.platform[OUT_WAR]))}</div>
     <p>${isParty ? (world.pushesChange(p.platform) ? `Campaigns to make Veyland a <b style="color:var(--text)">${esc(IDEOLOGIES[world.aimOf(p.platform)].name.toLowerCase())}</b> (the system its promises come closest to).` : 'Not campaigning to change the system.') + ' ' : ''}${world.wantsWar(p.platform) ? (world.war ? 'Wants to keep fighting.' : `Wants war with ${NEIGHBOUR}.`) : (world.war ? 'Wants peace.' : 'Wants peace with ' + NEIGHBOUR + '.')}${isParty && p.region != null ? ` Stands only in ${esc(REGIONS[p.region].name)}${p.homeShare != null ? ` (won ${pct(p.homeShare)} there)` : ''}.` : ''}</p>
@@ -980,7 +1011,8 @@ document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target =
 $('speeds').onclick = e => { const b = e.target.closest('button'); if (!b) return; speed = +b.dataset.s; [...$('speeds').children].forEach(x => x.classList.toggle('on', x === b)); };
 $('skip10').onclick = () => skip(10);
 $('skip50').onclick = () => skip(50);
-document.querySelectorAll('[data-shock]').forEach(b => b.onclick = () => { world.shock(b.dataset.shock); renderAll(true); });
+$('shockGo').onclick = () => { world.shock($('shockSel').value); renderAll(true); };
+$('events').addEventListener('click', e => { const b = e.target.closest('[data-evf]'); if (b) { evFilter = b.dataset.evf; renderEvents(); } });
 $('colorBy').onclick = e => { const b = e.target.closest('button'); if (!b) return; colorBy = b.dataset.c; [...$('colorBy').children].forEach(x => x.classList.toggle('on', x === b)); mapLegend(); drawMap(); };
 $('helpBtn').onclick = () => $('help').classList.toggle('open');
 $('startSel').innerHTML = IDEOLOGIES.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');

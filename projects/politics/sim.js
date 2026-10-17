@@ -156,6 +156,8 @@ const NR = REGIONS.length;
 
 const SYL1 = ['Al', 'Bre', 'Cal', 'Dar', 'El', 'Fen', 'Gar', 'Hal', 'Ise', 'Jor', 'Kel', 'Lio', 'Mar', 'Nel', 'Or', 'Pell', 'Quin', 'Ros', 'Sel', 'Tam', 'Ul', 'Ves', 'Wen', 'Yor', 'Zan', 'Ari', 'Bel', 'Cor', 'Dal', 'Emm'];
 const SYL2 = ['a', 'en', 'ic', 'o', 'ia', 'an', 'is', 'eth', 'ra', 'el', 'in', 'us', 'ie', 'ard', 'wyn', 'ora', 'ik', 'ette', 'mer', 'ton'];
+const SUR1 = ['Varn', 'Holt', 'Esk', 'Drey', 'Kell', 'Brand', 'Rook', 'Fell', 'Ward', 'Lun', 'Corr', 'Thal', 'Mar', 'Ost', 'Hale', 'Brin', 'Tarr', 'Wex', 'Asp', 'Grell'];
+const SUR2 = ['ley', 'mont', 'by', 'ard', 'ell', 'sen', 'ton', 'ow', 'ing', 'er', 'wick', 'stead'];
 const PARTY_A = ['Civic', "People's", 'New', 'United', 'Free', 'National', 'Popular', 'Democratic', 'Radical', 'Common', 'Progressive', 'Rural', 'Harbour', 'Labour', 'Citizens\''];
 const PARTY_B = ['Union', 'Front', 'Alliance', 'League', 'Movement', 'Party', 'Commonwealth', 'Rally', 'Bloc', 'Congress', 'Forward', 'Accord'];
 // Party colours: dark-surface categorical slots, assigned in founding order (a colour follows its party).
@@ -242,6 +244,9 @@ class World {
     this.press = { independent: 1, state: 0, industry: 0, unions: 0, small: 0 };
     // peaceful change of system: an amendment in progress, or a long run of wanting change
     this.amendment = null; this.directRun = null; this.pactRun = null;
+    // events: how hard each region has been hit lately, tension with Ostria, sanctions, a succession struggle
+    this.hurt = new Float32Array(NR); this.tension = 0; this.sanctions = 0; this.succession = 0;
+    this.lastScandal = null; this.mineralsFound = false; this.news = {};
 
     this.N0 = this.N;
     this.citizens = []; this.freeHomes = []; this.nextHome = 0;
@@ -257,7 +262,7 @@ class World {
     const start = IDX[opts.start] ?? IDX.democracy;
     if (IDEOLOGIES[start].rule === 'elections') {
       this.regime = start;
-      for (let k = 0; k < 4; k++) this._foundParty(null);
+      for (let k = 0; k < 6; k++) this._foundParty(null);
       this.nextElection = 12;     // first election after a year, so citizens have learned a little
       this._formCaretaker();
     } else this._changeRegime(start, 'vote');
@@ -354,7 +359,7 @@ class World {
     const demand = Math.pow(W.g, 0.4 + P[L.trade]) * (W.austerity > 0 ? 0.93 : 1);
     const reg = P[L.regulation], tax = P[L.tax];
     const E = (1 - 0.4 * W.C) * (1 + 0.06 * reg - 0.16 * reg * reg) * (1 + 0.16 * (P[L.trade] - 0.5)) * demand
-      * (1 - 0.1 * Math.max(0, tax - 0.45)) * (1 - 0.6 * W.strikeFrac - 1.2 * W.riotFrac) * (W.war ? 0.94 : 1);
+      * (1 - 0.1 * Math.max(0, tax - 0.45)) * (1 - 0.6 * W.strikeFrac - 1.2 * W.riotFrac) * (W.war ? 0.94 : 1) * (W.sanctions > 0 ? 0.95 : 1);
     let u = 0.045 + 0.16 * Math.max(0, P[L.wage] - 0.35) * (1 - sh.state) + 0.05 * reg * reg + 0.5 * Math.max(0, 1 - demand)
       - 0.06 * sh.state - 0.025 * sh.coop + 0.03 * Math.max(0, tax - 0.5);
     return { lam, E, uStar: clamp(u, 0.01, 0.45), effState: 1 - 0.35 * Math.pow(sh.state, 1.5), effCoop: 0.93 };
@@ -445,6 +450,7 @@ class World {
     if (this.debtRatio > 0.9) this.payFactor = clamp(this.payFactor * Math.pow(clamp(revenue / Math.max(1, spending), 0.1, 2), 0.6), 0.3, 1);
     else this.payFactor = Math.min(1, this.payFactor + 0.01);
     this.Ytot = Ytot; this.gdpPP = Ytot * 12 / cits.length;
+    this.yearOut = (this.yearOut || 0) + Ytot / cits.length; this.yearMonths = (this.yearMonths || 0) + 1;   // for a whole year's average
     this.avgWage = avgWage; this.meanIncome = cits.reduce((s, c) => s + c.net, 0) / cits.length;
     // people slowly get used to how well off everyone around them is
     if (this.REF) this.REF += (this.meanIncome - this.REF) * 0.003;
@@ -453,7 +459,11 @@ class World {
     const invest = 0.25 * profitBig + 0.3 * Math.max(0, profitState) + 0.08 * outCoop;   // planners invest heavily
     const gA = 0.006 + 0.10 * invest / Math.max(1, Ytot) + 0.02 * (P[L.services] - 0.3) + 0.015 * (P[L.liberty] - 0.5)
       - 0.03 * this.C - 0.025 * clamp(this.debtRatio - 0.9, 0, 2) + 0.015 * (P[L.trade] - 0.5) - 0.012 * sh.state * sh.state;   // but plans adapt slowly
-    this.A *= 1 + gA / 12;
+    // catching up: the further behind the world's best methods, the faster a country can copy them
+    // (easier with open trade and free exchange of ideas)
+    this.frontier = (this.frontier || 100) * (1 + 0.013 / 12);
+    const catchUp = 0.02 * (0.3 + P[L.trade] + 0.5 * P[L.liberty]) * Math.max(0, Math.log(this.frontier / this.A));
+    this.A *= 1 + (gA + catchUp) / 12;
 
     // inequality (Gini of take-home pay), every 3 months
     if (this.month % 3 === 0) {
@@ -474,18 +484,30 @@ class World {
     }
 
     // world economy and weather
-    this.g = 1 + 0.97 * (this.g - 1) + 0.012 * r.gauss();
-    if (r() < 0.004) { this.g -= 0.12; this.log('A slump in the wider world: trade dries up and orders fall.', 'shock'); }
+    this.g = 1 + 0.97 * (this.g - 1) + 0.007 * r.gauss();
+    if (r() < 0.0025) { this.g -= 0.08; this.log('A slump in the wider world: trade dries up and orders fall.', 'economy'); }
     if (this.month % 12 === 0) {
       this.harvest = r() < 0.06 ? 0.65 : 1 + r.gauss() * 0.05;
-      if (this.harvest < 0.8) this.log('A bad harvest hits the farms of Redfield.', 'shock');
+      if (this.harvest < 0.8) this.log('A bad harvest hits the farms of Redfield.', 'disaster');
     }
     // debt crisis: lenders panic when debt gets too big
     if (this.austerity > 0) this.austerity--;
     else if (this.debtRatio > 0.9 && r() < 0.02 * (this.debtRatio - 0.8) * 10) {
-      this.austerity = 24; this.A *= 0.95; this.debt *= 0.5; this.g -= 0.05;
+      this.austerity = 24; this.A *= 0.98; this.debt *= 0.5; this.g -= 0.05;
       this.log(`Debt crisis! Debt reached ${Math.round(this.debtRatio * 100)}% of a year's output. Lenders panic; pay, pensions and benefits are cut for two years.`, 'crisis');
     }
+    // lenders' conditions: while debt is dangerously high, taxes must rise and spending must fall
+    if (this.debtRatio > 0.9) {
+      const d = this.ideology;
+      if (!this.creditorRule) this.log('Lenders will only keep lending if taxes go up and spending comes down. The government has no choice.', 'economy');
+      this.creditorRule = true;
+      P[L.tax] = Math.min(d.hi[L.tax], P[L.tax] + 0.01);
+      P[L.welfare] = Math.max(d.lo[L.welfare], P[L.welfare] - 0.004);
+      P[L.police] = Math.max(d.lo[L.police], P[L.police] - 0.002);
+      this.target[L.tax] = Math.max(this.target[L.tax], P[L.tax]);
+      this.taxFloor = { level: P[L.tax], until: this.month + 60 };   // and taxes may not fall back for five years
+    } else if (this.debtRatio < 0.6) this.creditorRule = false;
+    if (this.taxFloor && this.month < this.taxFloor.until) P[L.tax] = Math.max(P[L.tax], Math.min(this.ideology.hi[L.tax], this.taxFloor.level));
     // ownership slowly follows the laws (nationalising, breaking up estates, founding co-ops)
     const st = this._shareTargets(P);
     for (const k in st) sh[k] += (st[k] - sh[k]) * 0.004;
@@ -503,11 +525,12 @@ class World {
     const gini = snap ? snap.gini : this.gini;
     const employed = snap ? true : c.employed;
     const jailed = !snap && c.jailed > 0;
-    n[0] = 1 - Math.exp(-net / REF);
+    n[0] = clamp(1 - Math.exp(-net / REF) - (snap ? 0 : 0.3 * this.hurt[c.region]), 0, 1);
     const pollution = (1 - P[L.regulation]) * REGIONS[c.region].industry * 0.5;
     n[1] = clamp(0.2 + 0.45 * P[L.services] + 0.25 * n[0] - pollution, 0, 1);
     const war = !snap && this.war ? 0.15 + 0.15 * Math.max(0, -this.war.score) : 0;   // bombs, shortages, fear of losing
-    n[2] = clamp(1 - crime * 1.5 - war, 0, 1);
+    const hurt = snap ? 0 : this.hurt[c.region];                     // a recent disaster here: loss, fear, rebuilding
+    n[2] = clamp(1 - crime * 1.5 - war - 0.6 * hurt, 0, 1);
     n[3] = jailed ? 0 : clamp(Math.pow(P[L.liberty], 0.7) - 0.3 * P[L.police] * (1 - P[L.liberty]), 0, 1);
     n[4] = clamp(1 - gini * 1.3 - 0.6 * (snap ? snap.C : this.C), 0, 1);
     let d;
@@ -636,7 +659,7 @@ class World {
     let protest = 0, strike = 0, riot = 0, workers = 0;
     let attack = 0, defence = 0;
     const want = new Float32Array(NI);
-    const force = 3 * (0.4 + P[L.police]);     // what one armed official is worth
+    const force = 3 * (0.4 + P[L.police]) * (this.succession > 0 ? 0.7 : 1);   // what one armed official is worth (less while rulers fight over succession)
     const legit = 0.08 * (0.5 + P[L.liberty]);   // loyalty counts for more where people are free to speak and choose
     let offRebels = 0, offTotal = 0, civRebels = 0;
     for (const c of cits) {
@@ -724,7 +747,7 @@ class World {
     if (d.rule === 'elections') {
       if (IDEOLOGIES[from].rule !== 'elections' || !this.parties.length) {
         this.deadParties.push(...this.parties); this.parties = [];
-        for (let k = 0; k < 3; k++) this._foundParty(null);
+        for (let k = 0; k < 4; k++) this._foundParty(null);
         this.log('Parties are allowed again. New ones form; nobody knows yet which promises win.', 'party');
       }
       this.faction = null;
@@ -807,6 +830,7 @@ class World {
       platform: this._platform(brain, this._inputs(0.2, false)), seats: 0, votes: 0, share: 0, govShare: 0, money: 0,
       generation: 0, history: [], weak: -1, conscience: new Float32Array(3 * 2), decisions: [], lastShare: 0, scandals: 0, bribes: 0,
       donors: {}, region,   // region: a regional party only stands in its home region
+      leader: this._newLeader(),
     };
     party.family = familyOf(party.platform);
     for (const c of this.citizens) c.trust[party.id] = r.gauss() * 0.1;
@@ -814,12 +838,21 @@ class World {
     return party;
   }
 
+  /** A named leader: charisma helps win votes; leaders age, resign, have scandals, and die. */
+  _newLeader(minAge = 38) {
+    const r = this.rng;
+    return {
+      name: SYL1[Math.floor(r() * SYL1.length)] + SYL2[Math.floor(r() * SYL2.length)] + ' ' + SUR1[Math.floor(r() * SUR1.length)] + SUR2[Math.floor(r() * SUR2.length)],
+      age: minAge + r() * 22, charisma: clamp(r.gauss() * 0.5, -1, 1), since: this.month,
+    };
+  }
   _newFaction(d) {
     const brain = this._freshBrain(d.typical);
     return {
       name: d.faction, ideology: d.id, brain, pool: [brain, ...Array.from({ length: 5 }, () => this._mutate(brain, 0.15))], poolScores: [],
       platform: this._platform(brain, this._inputs(0.5, true)), generation: 0, approval: 0.5, history: [],
       conscience: new Float32Array(3 * 2), decisions: [], lastApproval: 0.5, money: 0, scandals: 0, bribes: 0, since: this.month,
+      leader: this._newLeader(45),
     };
   }
 
@@ -830,6 +863,7 @@ class World {
   _utility(c, party, platform) {
     if (party.region != null && party.region !== c.region) return -Infinity;   // not on the ballot here
     let u = HOPE * this.expect(c, platform) + 0.6 * (c.trust[party.id] || 0) + (c.lastVote === party.id ? 0.15 : 0);
+    if (party.leader) u += 0.25 * party.leader.charisma;                      // a likeable (or awful) leader
     u += 0.3 * taste(c.id, party.id);                                          // personal taste: a candidate they like, a family habit
     if (party.region != null) u += 0.25;                                       // "one of us"
     // campaigning to change the whole system: welcome to those who want that system, alarming to the rest
@@ -945,25 +979,16 @@ class World {
       p.history.push([this.month, shares[k], seats[k]]);
     });
     // 6. coalition: biggest party gathers the closest partners until it has a majority
-    const order = this.parties.map((p, k) => k).sort((a, b) => seats[b] - seats[a]);
-    const lead = order[0];
-    const gov = [lead]; let have = seats[lead];
-    const dist = k => { let d = 0; for (let p = 0; p < NP; p++) d += (this.parties[k].platform[p] - this.parties[lead].platform[p]) ** 2; return d; };
-    const rest = order.slice(1).filter(k => seats[k] > 0).sort((a, b) => dist(a) - dist(b));
-    while (have < 51 && rest.length) { const k = rest.shift(); gov.push(k); have += seats[k]; }
-    for (const p of this.parties) p.govShare = 0;
-    const target = new Float32Array(NP);
-    for (const k of gov) {
-      const p = this.parties[k]; p.govShare = seats[k] / Math.max(1, have);
-      for (let q = 0; q < NP; q++) target[q] += p.platform[q] * p.govShare;
-    }
-    this.target = target;
-    this.government = { parties: gov.map(k => this.parties[k].id), caretaker: false, since: this.month };
-    const names = gov.map(k => `${this.parties[k].name} (${seats[k]})`).join(' + ');
+    const wasGov = new Set(this.government ? this.government.parties : []);
+    const gov = this._formGovernment([]);
+    const names = gov.map(p => `${p.name} (${p.seats})`).join(' + ');
     this.elections.push({ month: this.month, turnout: turnout / this.citizens.length, results: this.parties.map((p, k) => ({ id: p.id, name: p.name, color: p.color, share: shares[k], seats: seats[k] })), gov: this.government.parties.slice() });
     this.log(`Election: ${Math.round(100 * turnout / this.citizens.length)}% turnout. ${gov.length > 1 ? 'Coalition' : 'Government'}: ${names}.`, 'election');
     // 7. evolution: keep the winning candidate, try variations, borrow from rivals
     for (const party of this.parties) {
+      // a bad result, or losing power, often costs the leader their job
+      const lost = wasGov.has(party.id) && party.govShare === 0;
+      if (party.lastShare > 0.05 && (party.share < 0.7 * party.lastShare || lost) && r() < 0.45) this._replaceLeader(party, `resigns as leader of ${party.name} after ${lost ? 'losing power' : 'a bad result'}`);
       const rival = this.parties[Math.floor(r() * this.parties.length)];
       const kids = [party.brain];
       for (let i = 0; i < 4; i++) kids.push(this._mutate(party.brain, 0.12 + 0.1 * r()));
@@ -983,11 +1008,137 @@ class World {
       this.parties.splice(this.parties.indexOf(party), 1); this.deadParties.push(party);
       this.log(`${party.name} folds after two elections below 3%.`, 'party');
     }
+    // 8b. big parties whose own voters feel abandoned may split; small, similar ones may merge
+    this._maybeSplit();
+    this._maybeMerge();
     this.nextElection = this.month + 48;
     // 9. war or peace, if the new government wants it
     this._warPolicy();
     // 10. changing the system itself
     this._constitution();
+  }
+
+  /** The biggest party gathers the parties closest to it until it has a majority (or governs as a minority). */
+  _formGovernment(exclude) {
+    const cands = this.parties.filter(p => p.seats > 0 && !exclude.includes(p.id)).sort((a, b) => b.seats - a.seats);
+    for (const p of this.parties) p.govShare = 0;
+    if (!cands.length) { this._formCaretaker(); return []; }
+    const lead = cands[0];
+    const dist = q => { let d = 0; for (let k = 0; k < NP; k++) d += (q.platform[k] - lead.platform[k]) ** 2; return d; };
+    const rest = cands.slice(1).sort((a, b) => dist(a) - dist(b));
+    const gov = [lead]; let have = lead.seats;
+    while (have < 51 && rest.length) { const q = rest.shift(); gov.push(q); have += q.seats; }
+    const target = new Float32Array(NP);
+    for (const q of gov) { q.govShare = q.seats / Math.max(1, have); for (let k = 0; k < NP; k++) target[k] += q.platform[k] * q.govShare; }
+    this.target = target;
+    this.government = { parties: gov.map(q => q.id), caretaker: false, since: this.month, seats: have };
+    return gov;
+  }
+
+  /** Coalitions can fall apart between elections: after a scandal, or when a partner's support is collapsing. */
+  _coalitionCheck() {
+    const g = this.government;
+    if (this.ideology.rule !== 'elections' || !g || g.caretaker || g.parties.length < 2 || this.month - g.since < 6) return;
+    const gov = this.parties.filter(p => g.parties.includes(p.id));
+    const lead = gov.slice().sort((a, b) => b.seats - a.seats)[0];
+    for (const p of gov) {
+      if (p === lead) continue;
+      const scandal = this.lastScandal && this.lastScandal.party === lead.id && this.month - this.lastScandal.month <= 2;
+      const risk = 0.002 + (p.poll < 0.6 * p.share ? 0.012 : 0) + (scandal ? 0.12 : 0);
+      if (this.rng() > risk) continue;
+      const why = scandal ? `over the scandal around ${lead.name}` : 'as its support collapses';
+      const before = this.government.parties.length;
+      const rest = this._formGovernment([p.id]);
+      const have = rest.reduce((t, q) => t + q.seats, 0);
+      if (have >= 51) this.log(`${p.name} walks out of the government ${why}. ${rest.map(q => q.name).join(' + ')} ${rest.length > before - 1 ? 'form a new coalition' : 'carry on'} with ${have} seats.`, 'politics');
+      else if (this.rng() < 0.4) this.log(`${p.name} walks out of the government ${why}. ${lead.name} carries on as a minority government (${have} seats).`, 'politics');
+      else {
+        this.log(`${p.name} walks out of the government ${why}. It loses its majority and a snap election is called.`, 'politics');
+        this.nextElection = Math.min(this.nextElection, this.month + 2);
+      }
+      return;
+    }
+  }
+
+  _replaceLeader(holder, why) {
+    const old = holder.leader;
+    holder.leader = this._newLeader(holder === this.faction ? 45 : 38);
+    this.log(`${old.name} ${why}. ${holder.leader.name} takes over.`, 'leader');
+  }
+  /** Leaders age and die; dictators' deaths start a succession struggle; personal scandals end careers. */
+  _leaders() {
+    const r = this.rng, all = this.parties.slice();
+    if (this.faction) all.push(this.faction);
+    if (this.succession > 0) this.succession--;
+    for (const h of all) {
+      if (!h.leader) h.leader = this._newLeader();
+      const L0 = h.leader;
+      L0.age += 1 / 12;
+      const pDie = L0.age < 60 ? 0.0003 : 0.0003 * Math.exp((L0.age - 60) / 7);
+      if (r() < pDie) {
+        if (h === this.faction) {
+          this.succession = 8;
+          this._replaceLeader(h, `dies at ${Math.floor(L0.age)}. A power struggle follows inside the ${h.name}, and for a while the police are less sure whom to obey`);
+        } else this._replaceLeader(h, `dies at ${Math.floor(L0.age)}`);
+        continue;
+      }
+      // retirement from party politics
+      if (h !== this.faction && L0.age > 72 && r() < 0.02) { this._replaceLeader(h, `retires as leader of ${h.name}`); continue; }
+      // a personal scandal, found out by a free and independent press
+      if (h !== this.faction && r() < 0.0012 * this.P[L.liberty] * (0.3 + this.press.independent)) {
+        for (const c of this.citizens) c.trust[h.id] = clamp((c.trust[h.id] || 0) - 0.08, -1, 1);
+        this._replaceLeader(h, `of ${h.name} resigns after a personal scandal`);
+      }
+    }
+  }
+
+  _maybeSplit() {
+    const r = this.rng;
+    if (this.parties.length >= 8 || r() > 0.6) return;
+    for (const party of this.parties.slice().sort((a, b) => b.share - a.share)) {
+      if (party.share < 0.12) continue;
+      const members = this.citizens.filter(c => c.lastVote === party.id);
+      const unhappy = members.filter(c => sig(6 * this.expect(c, party.platform)) < 0.4);
+      if (unhappy.length < 25 || unhappy.length < 0.3 * members.length) continue;
+      const ideal = new Float32Array(NP);
+      for (let p = 0; p < NP; p++) {
+        let s = 0; for (const c of unhappy) s += Math.tanh(c.w[p] * 5);
+        ideal[p] = clamp(this.P[p] + 0.35 * s / unhappy.length, 0.02, 0.98);
+      }
+      const child = this._foundParty(ideal, party.region);
+      if (!child) return;
+      const base = party.name.replace(/^The /, '').replace(/^(True|New|Real|Free|Reformed) /, '');
+      const name = `${['True', 'New', 'Real', 'Free', 'Reformed'][Math.floor(r() * 5)]} ${base}`;
+      if (![...this.parties, ...this.deadParties].some(q => q.name === name)) child.name = name;
+      for (const c of unhappy) { c.trust[child.id] = 0.35; c.trust[party.id] = clamp((c.trust[party.id] || 0) - 0.15, -1, 1); }
+      this.log(`Split! ${unhappy.length} of ${party.name}'s voters feel the party has abandoned them. A breakaway group led by ${child.leader.name} founds ${child.name}.`, 'party');
+      return;
+    }
+  }
+  _maybeMerge() {
+    const r = this.rng;
+    if (this.parties.length < 5 || r() > 0.5) return;
+    const small = this.parties.filter(p => p.share < 0.07 && p.share > 0);
+    for (let i = 0; i < small.length; i++) for (let j = i + 1; j < small.length; j++) {
+      const a = small[i].share >= small[j].share ? small[i] : small[j], b = a === small[i] ? small[j] : small[i];
+      if (a.region !== b.region) continue;
+      let d = 0; for (let k = 0; k < NP; k++) d += (a.platform[k] - b.platform[k]) ** 2;
+      if (d > 0.3) continue;
+      for (const c of this.citizens) {
+        c.trust[a.id] = Math.max(c.trust[a.id] || 0, c.trust[b.id] || 0);
+        if (c.lastVote === b.id) c.lastVote = a.id;
+        if (c.voteIntent === b.id) c.voteIntent = a.id;
+      }
+      a.seats += b.seats; a.share += b.share; a.money += b.money;
+      if (this.government && this.government.parties.includes(b.id)) {
+        this.government.parties = this.government.parties.filter(id => id !== b.id);
+        if (!this.government.parties.includes(a.id)) this.government.parties.push(a.id);
+        a.govShare += b.govShare;
+      }
+      this.parties.splice(this.parties.indexOf(b), 1); this.deadParties.push(b);
+      this.log(`Merger: two small parties with similar ideas, ${a.name} and ${b.name}, join forces as ${a.name}.`, 'party');
+      return;
+    }
   }
 
   /* ---------------- changing the system peacefully (deliberately hard) ----------------
@@ -1062,7 +1213,7 @@ class World {
   }
 
   _maybeFoundParty() {
-    if (this.parties.length >= 7 || this.rng() > 0.6 || this.month - (this.lastFounding || -999) < 96) return;
+    if (this.parties.length >= 8 || this.rng() > 0.6 || this.month - (this.lastFounding || -999) < 60) return;
     // people for whom no party offers anything they believe in
     const lonely = this.citizens.filter(c => {
       let best = -Infinity; for (const p of this.parties) best = Math.max(best, this.expect(c, p.platform));
@@ -1077,7 +1228,7 @@ class World {
     const regional = this.parties.filter(p => p.region != null).length;
     for (let k = 0; k < NR; k++) if (regional < 2 && byReg[k] >= 25 && byReg[k] >= 0.5 * pop[k] && !this.parties.some(p => p.region === k)
       && (reg < 0 || byReg[k] / pop[k] > byReg[reg] / pop[reg])) reg = k;
-    if (lonely.length < this.citizens.length * 0.15 && reg < 0) return;
+    if (lonely.length < this.citizens.length * 0.12 && reg < 0) return;
     this.lastFounding = this.month;
     const founders = (reg >= 0 ? lonely.filter(c => c.region === reg) : lonely).slice(0, 40);
     const ideal = new Float32Array(NP);
@@ -1241,7 +1392,7 @@ class World {
     if (!this.war) {
       // Ostria attacks rarely, more often when Veyland is weak or in turmoil
       if (this.month - this.lastWarEnd >= 180) {
-        const p = 0.0004 * (1 + 3 * (this.riotFrac + this.protestFrac)) * clamp(theirs / ours, 0.3, 1.5);
+        const p = 0.0004 * (1 + 3 * (this.riotFrac + this.protestFrac)) * clamp(theirs / ours, 0.3, 1.5) * (1 + 2 * this.tension);
         if (r() < p) this._startWar('them');
       }
       return;
@@ -1257,6 +1408,107 @@ class World {
     }
     if (w.score >= 1) this._endWar('victory');
     else if (w.score <= -1) this._endWar('defeat');
+  }
+
+  /* ---------------- events: disasters, booms and busts, foreign affairs ----------------
+     Nothing here tells anyone what to do. The world just happens, more or less likely
+     depending on the laws (weak safety rules make mine disasters likelier, good schools
+     make inventions likelier...), and everyone reacts with what they have learned. */
+  _disaster(k, filter, victims, hurt, cost, text) {
+    const r = this.rng, P = this.P;
+    const idx = []; this.citizens.forEach((c, i) => { if (c.region === k && filter(c)) idx.push(i); });
+    let died = 0;
+    for (; died < victims && idx.length; died++) this._replace(idx.splice(Math.floor(r() * idx.length), 1)[0]);
+    // good public services and welfare soften the blow
+    const care = 1.3 - 0.5 * P[L.services] - 0.3 * P[L.welfare];
+    this.hurt[k] = clamp(this.hurt[k] + hurt * care, 0, 1);
+    this.debt += cost * 12 * this.Ytot;
+    this.log(text.replace('{died}', died === 1 ? 'one' : died).replace(/\{s\}/g, died === 1 ? '' : 's').replace('{region}', REGIONS[k].name), 'disaster');
+    return died;
+  }
+  _events() {
+    const r = this.rng, P = this.P, reg = P[L.regulation];
+    for (let k = 0; k < NR; k++) this.hurt[k] *= 0.93;
+    this.tension *= 0.98;
+    if (this.sanctions > 0) { this.sanctions--; if (P[L.liberty] >= 0.5) { this.sanctions = 0; this.log('Other countries lift their sanctions now that Veyland is freer.', 'economy'); } }
+    const RG = Object.fromEntries(REGIONS.map((x, k) => [x.name, k]));
+    const workers = c => c.cls === 'worker' && c.employed, anyone = () => true;
+    // industrial accidents: weak safety rules make them likelier
+    if (r() < 0.0015 * (1.3 - reg)) this._disaster(RG.Highcombe, workers, 2 + Math.floor(r() * 7), 0.5, 0.005, `Mine disaster in {region}: {died} miner{s} killed.${reg < 0.35 ? ' Safety rules were weak.' : ''}`);
+    if (r() < 0.0015 * (1.3 - reg)) this._disaster(RG.Ironvale, workers, 1 + Math.floor(r() * 6), 0.4, 0.008, `A huge factory fire in {region} kills {died} worker{s}.${reg < 0.35 ? ' Inspectors had been cut.' : ''}`);
+    // nature
+    if (r() < 0.002) {
+      const k = [RG.Redfield, RG.Fenwick, RG.Saltmere][Math.floor(r() * 3)];
+      if (k === RG.Redfield) this.harvest = Math.min(this.harvest || 1, 0.7);
+      this._disaster(k, anyone, Math.floor(r() * 4), 0.45, 0.01, 'Floods in {region}: thousands of homes are damaged and {died} drown.');
+    }
+    if (r() < 0.0006) { this.A *= 0.98; this._disaster(Math.floor(r() * NR), anyone, 2 + Math.floor(r() * 5), 0.8, 0.04, 'Earthquake in {region}: {died} people die and whole streets collapse. Rebuilding will take years.'); }
+    if (r() < 0.0008) {
+      let died = 0;
+      for (let i = 0; i < this.citizens.length; i++) { const c = this.citizens[i]; if (r() < (c.age > 60 ? 0.08 : 0.01) * (1.3 - P[L.services])) { this._replace(i); died++; } }
+      for (let k = 0; k < NR; k++) this.hurt[k] = clamp(this.hurt[k] + 0.2 * (1.3 - P[L.services]), 0, 1);
+      this.log(`An epidemic sweeps Veyland: ${died} people die, mostly the old.${P[L.services] > 0.6 ? ' Good hospitals keep the toll down.' : P[L.services] < 0.3 ? ' Hospitals are overwhelmed.' : ''}`, 'disaster');
+    }
+    // the economy: crashes come after booms where finance is lightly regulated
+    if (r() < 0.001 * (1.6 - reg) * (1 + 10 * Math.max(0, this.growth - 0.02))) {
+      this.g -= 0.15; this.A *= 0.98;
+      this.log(`Market crash! Banks that lent too freely collapse${reg < 0.35 ? ' (regulation was light)' : ''}. Firms cut jobs.`, 'economy');
+    }
+    if (r() < 0.0015) { this.g -= 0.06 + 0.1 * P[L.trade]; this.log(`Prices of fuel and raw materials jump around the world${P[L.trade] > 0.6 ? '. Veyland trades a lot, so it is hit hard' : ''}.`, 'economy'); }
+    if (r() < 0.0015) { this.g += 0.06; this.log('A boom in the wider world: orders for Veyland\'s goods pour in.', 'economy'); }
+    if (r() < 0.0015 * (0.4 + P[L.services] + 0.5 * P[L.liberty])) { this.A *= 1.025; this.log(`Veylander inventors make a breakthrough${P[L.services] > 0.6 ? ', thanks to good schools and universities' : ''}. Firms become more productive.`, 'economy'); }
+    if (!this.mineralsFound && r() < 0.0004) {
+      this.mineralsFound = true; this.A *= 1.03; this.C = Math.min(1, this.C + 0.05);
+      this.log('Rich mineral deposits are discovered in Highcombe. Money flows in, and so do people hoping for a cut.', 'economy');
+    }
+    // abroad
+    if (!this.war && r() < 0.002) { this.tension = Math.min(1, this.tension + 0.4); this.log(`Border incident: shots are fired on the border with ${NEIGHBOUR}. Tension rises.`, 'war'); }
+    if (!this.war && P[L.trade] > 0.5 && this.tension < 0.2 && this.month - this.lastWarEnd > 120 && r() < 0.0015) {
+      this.g += 0.03; this.tension = Math.max(0, this.tension - 0.2);
+      this.log(`Veyland and ${NEIGHBOUR} sign a trade deal. Exporters cheer.`, 'economy');
+    }
+    if (!this.sanctions && P[L.liberty] < 0.3 && r() < 0.004) { this.sanctions = 48; this.log('Other countries put sanctions on Veyland over its lack of freedom. Trade suffers.', 'economy'); }
+    if (P[L.liberty] > 0.4 && this.citizens.length < this.N0 * 1.25 && r() < 0.0015 * (this.g < 0.9 ? 4 : 1)) {
+      const n = 8 + Math.floor(r() * 15);
+      for (let t = 0; t < n; t++) this._immigrant(this.abroad * 0.8);
+      this.log(`A wave of ${n} refugees arrives, fleeing a crisis abroad.`, 'migration');
+    }
+    // assassination attempts: likelier in turbulent times
+    if (r() < 0.0004 + 0.01 * (this.riotFrac + 0.3 * this.protestFrac)) {
+      const targets = this.faction ? [this.faction] : this.parties.filter(p => p.govShare > 0);
+      const h = targets[Math.floor(r() * targets.length)];
+      if (h && h.leader) {
+        const name = h.leader.name;
+        if (r() < 0.35) {
+          if (h === this.faction) this.succession = 8;
+          for (const c of this.citizens) if (h !== this.faction) c.trust[h.id] = clamp((c.trust[h.id] || 0) + 0.1, -1, 1);
+          this._replaceLeader(h, `is assassinated${h === this.faction ? '. Rival factions scramble for power' : '. The country is in shock and sympathy for ' + h.name + ' grows'}`);
+        } else {
+          for (const c of this.citizens) if (h !== this.faction) c.trust[h.id] = clamp((c.trust[h.id] || 0) + 0.04, -1, 1);
+          this.log(`${name} (${h.name}) survives an assassination attempt.`, 'unrest');
+        }
+      }
+    }
+    // a feel-good moment
+    if (r() < 0.002) {
+      for (const c of this.citizens) for (const p of this.parties) if (p.govShare > 0) c.trust[p.id] = clamp((c.trust[p.id] || 0) + 0.03, -1, 1);
+      this.log(['Veyland wins the continental football cup! The country celebrates.', 'A Veylander wins a world prize for literature.', 'Veyland\'s athletes come home with a record haul of medals.'][Math.floor(r() * 3)], 'news');
+    }
+    // news reports on what is happening anyway (these only describe, they change nothing)
+    const once = (key, gap, text, kind) => { if (this.month - (this.news[key] ?? -999) >= gap) { this.news[key] = this.month; this.log(text, kind); } };
+    if (this.strikeFrac > 0.25) once('strike', 24, `General strike: ${Math.round(this.strikeFrac * 100)}% of workers walk out.`, 'unrest');
+    if (this.protestFrac > 0.15) once('protest', 24, `Mass protests: ${Math.round(this.protestFrac * this.citizens.length)} people are on the streets.`, 'unrest');
+  }
+  _immigrant(s0) {
+    const r = this.rng, w = [3, 2, 1, 3, 1, 1];
+    let x = r() * 11, region = 0;
+    while (x > w[region]) { x -= w[region]; region++; }
+    const c = this._newCitizen(null, 20 + r() * 20, region);
+    c.home = this.freeHomes.length ? this.freeHomes.pop() : this.nextHome++;
+    c.employed = false; c.immigrant = true; c.abroad = this.abroad;
+    c.s = s0; c.sRef = s0; c.sHist.fill(s0);
+    this.citizens.push(c); this.immigYear++;
+    return c;
   }
 
   /* ---------------- lobbies and corruption ---------------- */
@@ -1357,6 +1609,7 @@ class World {
         }
         const lob = this.lobbies.find(l => l.id === b.lobby);
         this.log(`Scandal! The press reveals that ${taker.name} took money from the ${lob.name} to change ${POLICIES[b.policy].name.toLowerCase()}.`, 'scandal');
+        if (isParty) this.lastScandal = { party: taker.id, month: this.month };
       }
     }
   }
@@ -1435,15 +1688,7 @@ class World {
     // immigrants: they know nothing about Veyland's politics yet
     const pull = this.meanS - this.abroad - 0.03;
     if (pull > 0 && P[L.liberty] > 0.3 && this.citizens.length < this.N0 * 1.15) {
-      for (let t = 0; t < 2; t++) if (r() < pull * 0.6) {
-        const w = [3, 2, 1, 3, 1, 1]; let x = r() * 11, region = 0;
-        while (x > w[region]) { x -= w[region]; region++; }
-        const c = this._newCitizen(null, 20 + r() * 20, region);
-        c.home = this.freeHomes.length ? this.freeHomes.pop() : this.nextHome++;
-        c.employed = false; c.immigrant = true; c.abroad = this.abroad;
-        c.s = this.abroad; c.sRef = this.abroad; c.sHist.fill(this.abroad);
-        this.citizens.push(c); this.immigYear++;
-      }
+      for (let t = 0; t < 2; t++) if (r() < pull * 0.6) this._immigrant(this.abroad);
     }
   }
 
@@ -1455,6 +1700,9 @@ class World {
     this._unrest();
     this._migration();
     this._govern();
+    this._coalitionCheck();
+    this._leaders();
+    this._events();
     this._warStep();
     this._lobbies();
     const snapP = new Float32Array(NW); snapP.set(this.P); snapP[W_WAR] = this.war ? 1 : 0;
@@ -1467,11 +1715,19 @@ class World {
 
   _record() {
     const prev = this.history[this.history.length - 1];
-    this.growth = prev ? this.gdpPP / prev.gdp - 1 : 0;
+    const gdp = this.yearOut / Math.max(1, this.yearMonths) * 12;   // output per person over the past year
+    this.yearOut = 0; this.yearMonths = 0;
+    this.growth = prev ? gdp / prev.gdp - 1 : 0;
+    if (prev && this.month > 24) {
+      if (this.growth < -0.02) this.log(`Recession: the economy shrank ${Math.round(-this.growth * 100)}% this year.`, 'economy');
+      else if (this.growth > 0.05) this.log(`Boom year: the economy grew ${Math.round(this.growth * 100)}%.`, 'economy');
+      let crime = 0; for (let k = 0; k < NR; k++) crime += this.crime[k] / NR;
+      if (crime > prev.crime + 0.05) this.log('A crime wave: robberies and violence rise sharply.', 'unrest');
+    }
     const favs = new Float32Array(NI); for (const c of this.citizens) favs[c.fav]++;
     let crime = 0; for (let k = 0; k < NR; k++) crime += this.crime[k] / NR;
     this.history.push({
-      year: Math.round(this.month / 12), gdp: this.gdpPP, u: this.u, gini: this.gini, s: this.meanS,
+      year: Math.round(this.month / 12), gdp, u: this.u, gini: this.gini, s: this.meanS,
       unrest: this.protestFrac + this.riotFrac + this.strikeFrac * 0.5, riot: this.riotFrac, crime, debt: this.debtRatio, C: this.C, regime: this.regime,
       favs: Array.from(favs, x => x / this.citizens.length), P: Array.from(this.P),
       polls: this.parties.map(p => ({ id: p.id, name: p.name, color: p.color, share: p.poll || 0 })),
@@ -1499,6 +1755,18 @@ class World {
       }
       this.A *= 0.97;
       this.log(`You caused an epidemic: ${died} people die. Good health care saves lives.`, 'shock');
+    } else if (kind === 'quake') {
+      this.A *= 0.98; this._disaster(Math.floor(this.rng() * NR), () => true, 4, 0.8, 0.04, 'You caused an earthquake in {region}: {died} people die.');
+    } else if (kind === 'crash') {
+      this.g -= 0.15; this.A *= 0.98; this.log('You caused a market crash: banks collapse and firms cut jobs.', 'economy');
+    } else if (kind === 'refugees') {
+      const n = 25; for (let t = 0; t < n; t++) this._immigrant(this.abroad * 0.8);
+      this.log(`You sent ${n} refugees to Veyland.`, 'migration');
+    } else if (kind === 'flood') {
+      this._disaster(2, () => true, 2, 0.5, 0.01, 'You caused floods in {region}: {died} people drown.'); this.harvest = 0.7;
+    } else if (kind === 'assassin') {
+      const h = this.faction || this.parties.find(p => p.govShare > 0);
+      if (h) { if (h === this.faction) this.succession = 8; this._replaceLeader(h, 'is assassinated (you did this)'); }
     } else if (kind === 'war') {
       if (this.war) return;
       this.ostria.army = Math.min(0.9, this.ostria.army + 0.2);
@@ -1522,6 +1790,11 @@ class World {
       const w = Object.create(World.prototype);
       Object.assign(w, decode(j.world));
       w.rng = makeRng(w.rngState); delete w.rngState;
+      // saves from before events existed
+      if (!w.hurt) w.hurt = new Float32Array(NR);
+      for (const k of ['tension', 'sanctions', 'succession']) if (typeof w[k] !== 'number') w[k] = 0;
+      if (!w.news) w.news = {};
+      for (const h of [...w.parties, ...(w.faction ? [w.faction] : [])]) if (!h.leader) h.leader = w._newLeader();
       if (!Array.isArray(w.citizens) || !w.citizens.length) throw new Error('no citizens');
       return { ok: true, world: w };
     } catch (e) { return { ok: false, error: 'The file is damaged: ' + e.message }; }
