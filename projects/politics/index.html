@@ -1,0 +1,852 @@
+<!doctype html>
+<!--
+================================================================================
+ GLASS BOX · POLITICS  -  index.html
+================================================================================
+ The page for sim.js: a map of Veyland, its parliament, charts, and an
+ inspector that shows what any citizen, party, ruler or lobby has learned.
+ Plain HTML/JS, no build step, works from file://.
+================================================================================
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Politics · Glass Box</title>
+<style>
+  :root {
+    --bg: #0d0f12; --panel: #14171c; --panel2: #181c22; --line: #262b33; --text: #e8e6e1; --muted: #8a8f98; --faint: #5a5f68;
+    --hue: #e07a9b; --signal: #ff6a3d; --pos: #3987e5; --neg: #e66767; --mid: #383835;
+    --mono: ui-monospace, "Cascadia Mono", Consolas, monospace;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; min-height: 100%; background: var(--bg); color: var(--text); font: 14px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif; }
+  header { padding: 10px 16px; border-bottom: 1px solid var(--line); display: flex; flex-wrap: wrap; gap: 10px 14px; align-items: center; }
+  header a { color: var(--muted); text-decoration: none; border: 1px solid var(--line); border-radius: 6px; padding: 3px 10px; }
+  h1 { font-size: 15px; margin: 0; letter-spacing: .03em; }
+  h1 span { color: var(--hue); }
+  .clock { font: 13px var(--mono); color: var(--muted); }
+  .clock b { color: var(--text); font-weight: 600; }
+  .chip { display: inline-flex; align-items: center; gap: 6px; border: 1px solid var(--line); border-radius: 999px; padding: 2px 10px; font-size: 13px; cursor: pointer; }
+  .chip i { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .label { color: var(--muted); font: 11px var(--mono); letter-spacing: .06em; text-transform: uppercase; }
+  select, button, input { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 11px; font: inherit; cursor: pointer; }
+  input { cursor: text; width: 90px; }
+  button.on { border-color: var(--hue); color: var(--hue); }
+  button.go { background: var(--hue); color: #0d0f12; border-color: var(--hue); font-weight: 600; }
+  button:disabled { opacity: .45; cursor: default; }
+  .bar { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; padding: 8px 16px; border-bottom: 1px solid var(--line); }
+  .bar .sep { width: 1px; height: 22px; background: var(--line); margin: 0 4px; }
+  .group { display: inline-flex; gap: 0; }
+  .group button { border-radius: 0; margin-left: -1px; }
+  .group button:first-child { border-radius: 6px 0 0 6px; margin-left: 0; }
+  .group button:last-child { border-radius: 0 6px 6px 0; }
+
+  main { display: grid; grid-template-columns: minmax(0, 1fr) 380px; align-items: start; }
+  @media (max-width: 980px) { main { grid-template-columns: minmax(0, 1fr); } }
+  .left { min-width: 0; padding: 14px 16px 40px; display: flex; flex-direction: column; gap: 14px; }
+  .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; padding: 12px; min-width: 0; }
+  .panel h2 { font: 600 12px var(--mono); letter-spacing: .1em; text-transform: uppercase; margin: 0 0 8px; color: var(--muted); }
+  .panel h2 small { text-transform: none; letter-spacing: 0; font: 12px system-ui, sans-serif; color: var(--faint); margin-left: 6px; }
+  .row2 { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 14px; }
+  @media (max-width: 760px) { .row2 { grid-template-columns: minmax(0, 1fr); } }
+
+  #mapWrap { position: relative; aspect-ratio: 16 / 10; width: 100%; border-radius: 8px; overflow: hidden; background: #0b0d10; }
+  #map { position: absolute; inset: 0; width: 100%; height: 100%; display: block; cursor: crosshair; }
+  #mapTip { position: absolute; pointer-events: none; background: rgba(13,15,18,.92); border: 1px solid var(--line); border-radius: 6px; padding: 4px 8px; font-size: 12px; display: none; white-space: nowrap; }
+  #mapLegend { display: flex; flex-wrap: wrap; gap: 4px 14px; margin-top: 8px; font-size: 12px; color: var(--muted); }
+  #mapLegend span { display: inline-flex; align-items: center; gap: 6px; }
+  #mapLegend i { width: 9px; height: 9px; border-radius: 50%; display: inline-block; }
+  #overlay { position: absolute; inset: 0; display: none; place-items: center; background: rgba(13,15,18,.7); font: 14px var(--mono); color: var(--text); }
+
+  .regime h3 { margin: 0; font-size: 18px; }
+  .regime p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  #parl { width: 100%; height: 150px; display: block; margin-top: 8px; }
+  .plist { display: flex; flex-direction: column; gap: 4px; margin-top: 6px; }
+  .pcard { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 8px; align-items: center; padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; cursor: pointer; font-size: 13px; }
+  .pcard:hover, .pcard.sel { border-color: var(--hue); }
+  .pcard i { width: 10px; height: 10px; border-radius: 3px; }
+  .pcard .nm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pcard .nm small { color: var(--muted); }
+  .pcard .num { font: 12px var(--mono); color: var(--muted); text-align: right; }
+  .gov { font: 10px var(--mono); color: var(--hue); border: 1px solid var(--hue); border-radius: 4px; padding: 0 4px; margin-left: 4px; }
+
+  .hbars { display: grid; grid-template-columns: 150px minmax(0, 1fr) 40px; gap: 4px 8px; align-items: center; font-size: 12.5px; }
+  .hbars .v { font: 12px var(--mono); color: var(--muted); text-align: right; }
+  .track { height: 8px; background: #1d2128; border-radius: 4px; overflow: hidden; position: relative; }
+  .track i { display: block; height: 100%; border-radius: 0 4px 4px 0; }
+  .now { color: var(--hue); font: 10px var(--mono); }
+
+  .charts { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
+  @media (max-width: 760px) { .charts { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  .chart .hd { display: flex; justify-content: space-between; gap: 6px; font-size: 12px; color: var(--muted); }
+  .chart .hd b { color: var(--text); font: 600 12px var(--mono); }
+  .chart canvas { width: 100%; height: 92px; display: block; margin-top: 4px; }
+  #votes { width: 100%; height: 150px; display: block; }
+  #chartTip { position: fixed; pointer-events: none; background: rgba(13,15,18,.95); border: 1px solid var(--line); border-radius: 6px; padding: 6px 9px; font-size: 12px; display: none; z-index: 5; min-width: 150px; }
+  #chartTip div { display: flex; justify-content: space-between; gap: 12px; }
+  #chartTip span { color: var(--muted); }
+
+  table.heat { border-collapse: separate; border-spacing: 2px; width: 100%; font-size: 12px; }
+  table.heat th { font-weight: 500; color: var(--muted); text-align: left; padding: 2px 4px; white-space: nowrap; }
+  table.heat thead th { text-align: center; font: 11px var(--mono); }
+  table.heat td { height: 20px; border-radius: 3px; text-align: center; font: 11px var(--mono); color: rgba(232,230,225,.85); min-width: 40px; }
+  .scale { display: flex; align-items: center; gap: 8px; font-size: 11.5px; color: var(--muted); margin-top: 6px; }
+  .scale .grad { width: 120px; height: 8px; border-radius: 4px; background: linear-gradient(90deg, var(--neg), var(--mid), var(--pos)); }
+
+  .lobbies { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+  @media (max-width: 760px) { .lobbies { grid-template-columns: minmax(0, 1fr); } }
+  .lcard { border: 1px solid var(--line); border-radius: 8px; padding: 8px 10px; cursor: pointer; font-size: 12.5px; }
+  .lcard:hover, .lcard.sel { border-color: var(--hue); }
+  .lcard b { font-size: 13px; }
+  .lcard div { color: var(--muted); }
+
+  aside { border-left: 1px solid var(--line); position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; min-width: 0; }
+  @media (max-width: 980px) { aside { position: static; height: auto; border-left: 0; border-top: 1px solid var(--line); } }
+  #inspector { padding: 14px; overflow-y: auto; flex: 1 1 auto; min-height: 200px; }
+  #inspector h3 { margin: 0; font-size: 17px; display: flex; align-items: center; gap: 8px; }
+  #inspector h3 i { width: 12px; height: 12px; border-radius: 3px; display: inline-block; }
+  #inspector .sub { color: var(--muted); font-size: 13px; margin: 2px 0 10px; }
+  #inspector h4 { font: 600 11px var(--mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); margin: 16px 0 6px; }
+  #inspector h4 small { text-transform: none; letter-spacing: 0; font: 12px system-ui, sans-serif; color: var(--faint); display: block; margin-top: 2px; }
+  #inspector .hbars { grid-template-columns: 128px minmax(0, 1fr) 40px; }
+  #inspector p { color: var(--muted); font-size: 13px; margin: 6px 0; }
+  .dtrack { height: 8px; background: #1d2128; border-radius: 4px; position: relative; }
+  .dtrack::after { content: ''; position: absolute; left: 50%; top: -2px; bottom: -2px; width: 1px; background: var(--faint); }
+  .dtrack i { position: absolute; top: 0; bottom: 0; }
+  .promise { height: 12px; position: relative; }
+  .promise::before { content: ''; position: absolute; left: 0; right: 0; top: 5px; height: 2px; background: #1d2128; border-radius: 1px; }
+  .promise .cur { position: absolute; top: 0; width: 2px; height: 12px; background: var(--muted); margin-left: -1px; }
+  .promise .pro { position: absolute; top: 1px; width: 10px; height: 10px; border-radius: 50%; margin-left: -5px; box-shadow: 0 0 0 2px var(--bg); }
+  .pill { display: inline-block; border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; font-size: 12px; color: var(--muted); margin: 0 4px 4px 0; }
+  .hint { color: var(--faint); font-size: 12.5px; }
+  #brain { width: 100%; height: 250px; display: block; background: #0f1215; border-radius: 6px; }
+  table.mini { border-collapse: separate; border-spacing: 2px; font-size: 12px; width: 100%; }
+  table.mini th { color: var(--muted); font-weight: 500; text-align: left; padding: 0 4px; white-space: nowrap; }
+  table.mini thead th { text-align: center; font-size: 11px; }
+  table.mini td { text-align: center; border-radius: 3px; font: 11px var(--mono); height: 20px; }
+
+  #events { border-top: 1px solid var(--line); padding: 10px 14px; overflow-y: auto; flex: 0 0 28%; font-size: 12.5px; }
+  #events .ev { display: grid; grid-template-columns: 46px 10px minmax(0, 1fr); gap: 6px; padding: 3px 0; color: var(--muted); }
+  #events .ev .y { font: 11px var(--mono); color: var(--faint); padding-top: 2px; }
+  #events .ev i { width: 7px; height: 7px; border-radius: 50%; margin-top: 6px; }
+  #events .ev.big { color: var(--text); }
+  @media (max-width: 980px) { #events { max-height: 340px; } }
+
+  #help { display: none; }
+  #help.open { display: block; }
+  #help p { margin: 6px 0; color: var(--muted); font-size: 13.5px; max-width: 70em; }
+  #help b { color: var(--text); font-weight: 600; }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: 10px; padding: 18px; max-width: 460px; }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog label { display: block; margin: 10px 0 4px; color: var(--muted); font-size: 13px; }
+  dialog select { width: 100%; }
+  dialog .blurb { color: var(--muted); font-size: 13px; min-height: 40px; margin-top: 6px; }
+</style>
+</head>
+<body>
+<header>
+  <a href="../../index.html">← Glass Box</a>
+  <h1>POLITICS · <span>Veyland</span></h1>
+  <span class="clock">Year <b id="year">0</b> · <span id="month">Jan</span></span>
+  <span class="chip" id="regimeChip" title="Who rules: click to look inside"><i></i><span></span></span>
+  <span class="clock" id="nextEl"></span>
+</header>
+<div class="bar">
+  <button id="play" class="go" title="Space">Pause</button>
+  <span class="group" id="speeds">
+    <button data-s="1" class="on" title="2 seconds per year">1×</button><button data-s="3">3×</button><button data-s="10">10×</button><button data-s="30">30×</button>
+  </span>
+  <button id="skip10" title="Run 10 years as fast as possible">Skip 10 years</button>
+  <button id="skip50">Skip 50 years</button>
+  <span class="sep"></span>
+  <span class="label">Shake things up</span>
+  <span class="group">
+    <button data-shock="slump" title="World demand collapses">World slump</button><button data-shock="harvest" title="Farm incomes halve for a year">Bad harvest</button><button data-shock="epidemic" title="An illness kills mostly the old; good health care saves lives">Epidemic</button><button data-shock="debt" title="The state inherits a huge debt">Old debt</button>
+  </span>
+  <span class="sep"></span>
+  <button id="newBtn">New country…</button>
+  <button id="helpBtn">What am I looking at?</button>
+</div>
+
+<main>
+  <div class="left">
+    <div class="panel" id="help">
+      <h2>How Veyland works</h2>
+      <p>Veyland is a made-up country of <b>600 citizens</b>. Nothing anyone does is scripted. Everybody <b>starts knowing nothing</b> and learns from their own experience.</p>
+      <p><b>Citizens</b> feel six needs (money, health, safety, freedom, fairness, dignity at work). Each year they compare how their life changed with how the laws changed, and slowly learn which laws help or hurt <i>them</i>. A factory worker, a farmer and a factory owner learn different things. They vote for whoever promises the laws they believe in, and trust parties that governed while life got better. They also chat with neighbours and pick up their opinions.</p>
+      <p>Each month they choose to <b>stay quiet, protest, strike or rise up</b>, and learn from what happened next: did life improve, did they get arrested? A crowd nearby, anger, and believing in a better system push them to act. Strong police hold them back. If the people (and police) who want a different system outweigh those defending it, there's a <b>revolution or coup</b>, and the country becomes whatever most rebels wanted: communism, syndicalism, mutualism, distributism, fascism, technocracy, a free-market minarchy, a military junta, or liberal democracy.</p>
+      <p><b>Parties</b> have a small brain (a neural network) that turns the state of the country into promises. Before each election, each party tests six versions of its brain in an opinion poll (a primary). The winner leads, and the next six are variations of it, plus ideas copied from rivals. That's evolution: promises that win votes survive. <b>Dictators</b> evolve the same way, but they test plans on their own supporters, especially the police. <b>Experts</b> (technocracy) test plans with the economic model.</p>
+      <p><b>Lobbies</b> (business, unions, smallholders) learn whether saving, donating to a party or bribing the government helps their members. Governments learn whether taking bribes pays, but a free press finds some of them out.</p>
+      <p>Click any dot, party, lobby or the ruler to <b>look inside their head</b>.</p>
+    </div>
+
+    <div class="row2">
+      <div class="panel">
+        <h2>Map <small id="mapNote">dots are citizens · click one to see inside their head</small></h2>
+        <div id="mapWrap"><canvas id="map"></canvas><div id="mapTip"></div><div id="overlay"></div></div>
+        <div style="display:flex; gap:8px; align-items:center; margin-top:8px; flex-wrap:wrap">
+          <span class="label">Colour by</span>
+          <span class="group" id="colorBy">
+            <button data-c="vote" class="on">Vote</button><button data-c="happy">Happiness</button><button data-c="action">Doing</button><button data-c="wants">Wants system</button><button data-c="class">Class</button>
+          </span>
+        </div>
+        <div id="mapLegend"></div>
+      </div>
+      <div class="panel regime">
+        <h2>Who rules</h2>
+        <div id="regimeBox"></div>
+        <canvas id="parl"></canvas>
+        <div class="plist" id="plist"></div>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Veyland over time <small>hover to compare years · the coloured strip shows who ruled</small></h2>
+      <div class="charts" id="charts"></div>
+      <h2 style="margin-top:14px">Opinion polls <small>share who would vote for each party</small></h2>
+      <canvas id="votes"></canvas>
+      <div id="votesLegend" style="display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12px; color:var(--muted); margin-top:6px"></div>
+    </div>
+
+    <div class="row2">
+      <div class="panel">
+        <h2>What people have learned each law does to them</h2>
+        <div style="overflow-x:auto"><table class="heat" id="beliefs"></table></div>
+        <div class="scale"><span>hurts me</span><span class="grad"></span><span>helps me</span><span class="hint">· everyone started at zero</span></div>
+      </div>
+      <div class="panel">
+        <h2>Which system people would choose</h2>
+        <div class="hbars" id="systems"></div>
+        <p class="hint" style="margin:8px 0 0">They judge other systems by the laws they would bring, using what they have learned. Systems they have lived under are judged by memory, and a system nobody has tried feels risky.</p>
+      </div>
+    </div>
+
+    <div class="panel">
+      <h2>Lobbies <small>click one to see what it has learned</small></h2>
+      <div class="lobbies" id="lobbies"></div>
+    </div>
+  </div>
+
+  <aside>
+    <div id="inspector"></div>
+    <div id="events"></div>
+  </aside>
+</main>
+<div id="chartTip"></div>
+
+<dialog id="newDlg">
+  <h3 style="margin:0 0 4px">Found a new Veyland</h3>
+  <div class="hint">600 new citizens who know nothing yet.</div>
+  <label for="startSel">It starts as</label>
+  <select id="startSel"></select>
+  <div class="blurb" id="startBlurb"></div>
+  <label for="seedIn">Seed <span class="hint">(same seed, same history)</span></label>
+  <input id="seedIn" type="number" min="1" step="1">
+  <div style="display:flex; gap:8px; justify-content:flex-end; margin-top:16px">
+    <button id="newCancel">Cancel</button><button id="newGo" class="go">Found it</button>
+  </div>
+</dialog>
+
+<script src="../embodied-2d/brain.js"></script>
+<script src="sim.js"></script>
+<script>
+'use strict';
+const { World, POLICIES, NEEDS, IDEOLOGIES, REGIONS, ACTIONS, FEATURES, BRAIN_SIZES, INPUT_NAMES, L } = Politics;
+const $ = id => document.getElementById(id);
+const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
+const pct = x => Math.round(x * 100) + '%';
+const num = x => { const v = x.toFixed(1); return v === '-0.0' ? '0.0' : v; };
+const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+const STATUS = { protest: '#fab219', strike: '#ec835a', rise: '#d03b3b' };
+const CLASS_COLORS = { worker: '#3987e5', unemployed: '#199e70', small: '#c98500', owner: '#d55181', official: '#9085e9', retired: '#8a8f98' };
+const CLASS_NAMES = { worker: 'Worker', unemployed: 'Unemployed', small: 'Smallholder', owner: 'Owner', official: 'Police & officials', retired: 'Retired' };
+
+/* ---------- colour helpers ---------- */
+function hex(h) { const n = parseInt(h.slice(1), 16); return [n >> 16 & 255, n >> 8 & 255, n & 255]; }
+function mix(a, b, t) { const A = hex(a), B = hex(b); return `rgb(${A.map((v, i) => Math.round(v + (B[i] - v) * t)).join(',')})`; }
+/** Diverging: red (bad) - grey - blue (good). v in -1..1 */
+function div(v) { v = clamp(v, -1, 1); return v >= 0 ? mix('#383835', '#3987e5', v) : mix('#383835', '#e66767', -v); }
+
+/* ---------- state ---------- */
+let world, running = true, speed = 1, acc = 0, last = performance.now(), busy = false;
+let colorBy = 'vote', selected = null, hoverCit = null, hoverYear = null;
+let seed = 1 + Math.floor(Math.random() * 99999), startAs = 'democracy';
+
+function newWorld(s, start) {
+  seed = s; startAs = start;
+  world = new World({ seed, start });
+  places.clear();
+  selected = null;
+  renderAll(true);
+}
+
+/* =============================================================================
+   Map
+============================================================================= */
+const map = { cv: $('map'), ctx: $('map').getContext('2d'), W: 0, H: 0, dpr: 1, land: null };
+const CX = 0.5, CY = 0.53, RX = 0.46, RY = 0.44;
+function coast(th) { return 1 + 0.08 * Math.sin(3 * th + 1.3) + 0.05 * Math.sin(5 * th + 0.4) + 0.03 * Math.sin(11 * th + 2); }
+function inLand(u, v) { const dx = (u - CX) / RX, dy = (v - CY) / RY; return Math.hypot(dx, dy) < coast(Math.atan2(dy, dx)) * 0.97; }
+function regionAt(u, v) {
+  let best = 0, bd = Infinity;
+  REGIONS.forEach((r, k) => { const d = ((u - r.x) * 1.6) ** 2 + (v - r.y) ** 2; if (d < bd) { bd = d; best = k; } });
+  return best;
+}
+// Each place on the map is a "home": when someone dies, their child lives in the same spot.
+const places = new Map();
+function placeOf(c) {
+  let slot = homeOf.get(c);
+  if (slot === undefined) { updateHomes(); slot = homeOf.get(c) ?? 0; }
+  const key = slot * 8 + c.region;
+  let p = places.get(key);
+  if (p) return p;
+  {
+    let h = (slot + 1) * 2654435761 >>> 0;
+    const rnd = () => { h = (h ^ (h >>> 15)) * 2246822519 >>> 0; h = (h ^ (h >>> 13)) * 3266489917 >>> 0; return ((h ^= h >>> 16) >>> 0) / 4294967296; };
+    const R = REGIONS[c.region];
+    for (let t = 0; t < 60; t++) {
+      const a = rnd() * Math.PI * 2, d = Math.sqrt(rnd()) * 0.3;
+      const x = R.x + Math.cos(a) * d / 1.6, y = R.y + Math.sin(a) * d;
+      if (inLand(x, y) && regionAt(x, y) === c.region) { p = { x, y }; break; }
+    }
+    if (!p) p = { x: R.x, y: R.y };
+  }
+  places.set(key, p);
+  return p;
+}
+let homeOf = new WeakMap();
+function updateHomes() { world.citizens.forEach((c, i) => homeOf.set(c, i)); }
+
+function resizeMap() {
+  const r = map.cv.getBoundingClientRect();
+  map.dpr = Math.min(2, window.devicePixelRatio || 1);
+  map.W = Math.max(10, Math.round(r.width * map.dpr)); map.H = Math.max(10, Math.round(r.height * map.dpr));
+  map.cv.width = map.W; map.cv.height = map.H;
+  // land and region borders, drawn once per size
+  const off = document.createElement('canvas'); off.width = map.W; off.height = map.H;
+  const octx = off.getContext('2d'), img = octx.createImageData(map.W, map.H), d = img.data;
+  const tints = [[24, 28, 35], [21, 25, 31], [23, 27, 33], [20, 24, 30], [25, 28, 34], [22, 26, 32]];
+  const step = 1;
+  const reg = new Int8Array(map.W * map.H);
+  for (let y = 0; y < map.H; y += step) for (let x = 0; x < map.W; x += step) {
+    const u = x / map.W, v = y / map.H, i = y * map.W + x;
+    reg[i] = inLand(u, v) ? regionAt(u, v) : -1;
+  }
+  for (let y = 0; y < map.H; y++) for (let x = 0; x < map.W; x++) {
+    const i = y * map.W + x, k = reg[i], o = i * 4;
+    if (k < 0) { d[o] = 11; d[o + 1] = 13; d[o + 2] = 16; d[o + 3] = 255; continue; }
+    const edge = (x > 0 && reg[i - 1] !== k) || (y > 0 && reg[i - map.W] !== k) || (x < map.W - 1 && reg[i + 1] !== k) || (y < map.H - 1 && reg[i + map.W] !== k);
+    const coastEdge = edge && ((x > 0 && reg[i - 1] < 0) || (y > 0 && reg[i - map.W] < 0) || (x < map.W - 1 && reg[i + 1] < 0) || (y < map.H - 1 && reg[i + map.W] < 0));
+    const t = coastEdge ? [70, 76, 86] : edge ? [44, 49, 57] : tints[k];
+    d[o] = t[0]; d[o + 1] = t[1]; d[o + 2] = t[2]; d[o + 3] = 255;
+  }
+  octx.putImageData(img, 0, 0);
+  map.land = off;
+  drawMap();
+}
+
+function citizenColor(c) {
+  const ideo = world.ideology;
+  let mode = colorBy;
+  if (mode === 'vote' && !world.parties.length) mode = 'wants';
+  if (mode === 'vote') { const p = world.parties.find(p => p.id === c.voteIntent); return p ? p.color : '#4a4f58'; }
+  if (mode === 'happy') return div((c.s - 0.55) / 0.25);
+  if (mode === 'action') return c.jailed ? '#5a5f68' : c.action === 1 ? STATUS.protest : c.action === 2 ? STATUS.strike : c.action === 3 ? STATUS.rise : '#3a3f47';
+  if (mode === 'wants') return c.fav === world.regime ? '#4a4f58' : IDEOLOGIES[c.fav].hue;
+  return CLASS_COLORS[classKey(c)];
+}
+function classKey(c) { return c.cls === 'worker' && !c.employed ? 'unemployed' : c.cls; }
+
+function drawMap() {
+  const { ctx, W, H, dpr } = map;
+  if (!map.land || !world) return;
+  ctx.drawImage(map.land, 0, 0);
+  updateHomes();
+  const rad = Math.max(2.2, Math.min(W, H) / 150);
+  const t = performance.now() / 400;
+  for (const c of world.citizens) {
+    const p = placeOf(c), x = p.x * W, y = p.y * H;
+    const col = citizenColor(c);
+    if (c.jailed) {
+      ctx.strokeStyle = col; ctx.lineWidth = dpr; ctx.beginPath(); ctx.arc(x, y, rad, 0, 7); ctx.stroke();
+    } else {
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, rad, 0, 7); ctx.fill();
+      if (c.action && colorBy !== 'action') {   // people out on the street get a ring
+        ctx.strokeStyle = c.action === 3 ? STATUS.rise : c.action === 2 ? STATUS.strike : STATUS.protest;
+        ctx.globalAlpha = 0.5 + 0.4 * Math.sin(t + c.id); ctx.lineWidth = 1.2 * dpr;
+        ctx.beginPath(); ctx.arc(x, y, rad + 2.2 * dpr, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+      }
+    }
+  }
+  // region names
+  ctx.textAlign = 'center';
+  for (const r of REGIONS) {
+    const x = r.x * W, y = (r.y - 0.135) * H;
+    ctx.lineWidth = 3 * dpr; ctx.strokeStyle = 'rgba(13,15,18,.85)'; ctx.lineJoin = 'round';
+    ctx.font = `600 ${11 * dpr}px ui-monospace, monospace`; ctx.fillStyle = 'rgba(232,230,225,.7)';
+    ctx.strokeText(r.name.toUpperCase(), x, y); ctx.fillText(r.name.toUpperCase(), x, y);
+    ctx.font = `${10 * dpr}px system-ui, sans-serif`; ctx.fillStyle = 'rgba(138,143,152,.8)';
+    ctx.strokeText(r.kind, x, y + 12 * dpr); ctx.fillText(r.kind, x, y + 12 * dpr);
+  }
+  const sel = selected && selected.type === 'citizen' ? world.citizens.find(c => c.id === selected.id) : null;
+  for (const c of [sel, hoverCit]) if (c) {
+    const p = placeOf(c);
+    ctx.strokeStyle = '#e8e6e1'; ctx.lineWidth = 1.6 * dpr;
+    ctx.beginPath(); ctx.arc(p.x * W, p.y * H, rad + 4 * dpr, 0, 7); ctx.stroke();
+  }
+}
+
+function mapLegend() {
+  let mode = colorBy, items = [];
+  if (mode === 'vote' && !world.parties.length) mode = 'wants';
+  if (mode === 'vote') items = world.parties.map(p => [p.color, p.name]);
+  else if (mode === 'happy') items = [['#e66767', 'Unhappy'], ['#383835', 'Middling'], ['#3987e5', 'Happy']];
+  else if (mode === 'action') items = [['#3a3f47', 'Quiet'], [STATUS.protest, 'Protesting'], [STATUS.strike, 'On strike'], [STATUS.rise, 'Rising up'], ['#5a5f68', 'In jail (hollow)']];
+  else if (mode === 'wants') {
+    const seen = new Set(world.citizens.map(c => c.fav));
+    items = [['#4a4f58', `Happy with ${world.ideology.name}`], ...IDEOLOGIES.filter((d, k) => k !== world.regime && seen.has(k)).map(d => [d.hue, d.name])];
+  } else items = Object.keys(CLASS_COLORS).map(k => [CLASS_COLORS[k], CLASS_NAMES[k]]);
+  if (mode !== 'action') items.push(['ring', 'Ring: out protesting, striking or rising up']);
+  $('mapLegend').innerHTML = items.map(([c, n]) => c === 'ring'
+    ? `<span><i style="background:none;border:1.5px solid ${STATUS.protest}"></i>${esc(n)}</span>`
+    : `<span><i style="background:${c}"></i>${esc(n)}</span>`).join('');
+}
+
+map.cv.addEventListener('mousemove', e => {
+  const r = map.cv.getBoundingClientRect(), u = (e.clientX - r.left) / r.width, v = (e.clientY - r.top) / r.height;
+  let best = null, bd = 10 * 10;   // within 10 pixels
+  for (const c of world.citizens) { const p = placeOf(c), dx = (p.x - u) * r.width, dy = (p.y - v) * r.height, d = dx * dx + dy * dy; if (d < bd) { bd = d; best = c; } }
+  hoverCit = best;
+  const tip = $('mapTip');
+  if (best) {
+    tip.style.display = 'block';
+    tip.innerHTML = `<b>${esc(best.name)}</b> · ${Math.floor(best.age)} · ${esc(CLASS_NAMES[classKey(best)])} · ${best.jailed ? 'in jail' : esc(ACTIONS[best.action].toLowerCase())}`;
+    const x = e.clientX - r.left, y = e.clientY - r.top;
+    tip.style.left = Math.min(x + 12, r.width - tip.offsetWidth - 4) + 'px'; tip.style.top = Math.max(4, y - 30) + 'px';
+  } else tip.style.display = 'none';
+  if (!running) drawMap();
+});
+map.cv.addEventListener('mouseleave', () => { hoverCit = null; $('mapTip').style.display = 'none'; if (!running) drawMap(); });
+map.cv.addEventListener('click', () => { if (hoverCit) select({ type: 'citizen', id: hoverCit.id }); });
+
+/* =============================================================================
+   Who rules: regime card, parliament, party list
+============================================================================= */
+function leftness(p) { const v = p.platform; return v[L.welfare] + v[L.wage] + v[L.unions] + v[L.state] + v[L.coops] - v[L.police] * 0.5 - v[L.trade] * 0.5; }
+let seatSpots = null;
+function drawParliament() {
+  const cv = $('parl'), r = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+  if (cv.width !== Math.round(r.width * dpr)) { cv.width = Math.round(r.width * dpr); cv.height = Math.round(r.height * dpr); seatSpots = null; }
+  const ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  ctx.clearRect(0, 0, W, H);
+  const d = world.ideology;
+  if (d.rule !== 'elections') {
+    ctx.fillStyle = '#5a5f68'; ctx.font = `${12 * dpr}px system-ui`; ctx.textAlign = 'center';
+    const msg = { party: 'No parliament: one party rules.', experts: 'No parliament: experts decide.', councils: 'Workers’ councils vote on every law.', assembly: 'Every citizen votes on every law.' }[d.rule];
+    ctx.fillText(msg, W / 2, H / 2);
+    return;
+  }
+  if (!seatSpots) {
+    const R = Math.min(W / 2 - 6 * dpr, H - 8 * dpr), rows = 6, spots = [];
+    const radii = Array.from({ length: rows }, (_, i) => R * (0.42 + 0.58 * i / (rows - 1)));
+    const tot = radii.reduce((s, x) => s + x, 0);
+    let left = 101;
+    radii.forEach((rr, i) => {
+      const n = i === rows - 1 ? left : Math.round(101 * rr / tot); left -= n;
+      for (let j = 0; j < n; j++) { const a = Math.PI * (1 - (j + 0.5) / n); spots.push({ a, x: W / 2 + Math.cos(a) * rr, y: H - 4 * dpr - Math.sin(a) * rr }); }
+    });
+    spots.sort((p, q) => q.a - p.a);
+    seatSpots = { spots, rad: Math.max(2, R / 26) };
+  }
+  const parties = world.parties.filter(p => p.seats > 0).sort((a, b) => leftness(b) - leftness(a));
+  const gov = new Set(world.government.parties);
+  let k = 0;
+  for (const p of parties) for (let s = 0; s < p.seats && k < seatSpots.spots.length; s++, k++) {
+    const sp = seatSpots.spots[k];
+    ctx.fillStyle = p.color; ctx.globalAlpha = gov.has(p.id) ? 1 : 0.45;
+    ctx.beginPath(); ctx.arc(sp.x, sp.y, seatSpots.rad, 0, 7); ctx.fill();
+  }
+  ctx.globalAlpha = 1;
+  for (; k < seatSpots.spots.length; k++) { const sp = seatSpots.spots[k]; ctx.fillStyle = '#1d2128'; ctx.beginPath(); ctx.arc(sp.x, sp.y, seatSpots.rad, 0, 7); ctx.fill(); }
+  if (!world.elections.length) { ctx.fillStyle = '#8a8f98'; ctx.font = `${12 * dpr}px system-ui`; ctx.textAlign = 'center'; ctx.fillText('First election in ' + Math.max(0, world.nextElection - world.month) + ' months', W / 2, H - 10 * dpr); }
+}
+
+function renderRules() {
+  const d = world.ideology, years = Math.floor((world.month - world.regimeSince) / 12);
+  const how = { elections: 'Free elections every 4 years', party: 'One-party rule', experts: 'Rule by experts', councils: 'Workers’ councils', assembly: 'Direct democracy' }[d.rule];
+  const ruler = world.faction ? ` · <a href="#" data-sel="regime" style="color:var(--hue)">${esc(world.faction.name)}</a>` : '';
+  $('regimeBox').innerHTML = `<h3 style="display:flex;gap:8px;align-items:center"><i style="width:12px;height:12px;border-radius:3px;background:${d.hue}"></i>${esc(d.name)}</h3>
+    <p>${esc(how)}${ruler} · for ${years} year${years === 1 ? '' : 's'}. ${esc(d.blurb)}</p>`;
+  const chip = $('regimeChip');
+  chip.querySelector('i').style.background = d.hue; chip.querySelector('span').textContent = d.name;
+  $('nextEl').textContent = d.rule === 'elections' && Number.isFinite(world.nextElection) ? `next election in ${Math.max(0, world.nextElection - world.month)} months` : '';
+  const gov = new Set(world.government ? world.government.parties : []);
+  $('plist').innerHTML = world.parties.slice().sort((a, b) => (b.seats - a.seats) || (b.poll || 0) - (a.poll || 0)).map(p => `
+    <div class="pcard ${selected && selected.id === p.id ? 'sel' : ''}" data-party="${p.id}"><i style="background:${p.color}"></i>
+      <span class="nm">${esc(p.name)}${gov.has(p.id) ? '<span class="gov">GOV</span>' : ''} <small>· ${esc(p.family)}</small></span>
+      <span class="num">${p.seats} seats · polls ${pct(p.poll || 0)}</span></div>`).join('');
+  drawParliament();
+}
+$('plist').addEventListener('click', e => { const el = e.target.closest('[data-party]'); if (el) select({ type: 'party', id: el.dataset.party }); });
+$('regimeBox').addEventListener('click', e => { if (e.target.closest('[data-sel]')) { e.preventDefault(); select({ type: 'regime' }); } });
+$('regimeChip').addEventListener('click', () => select({ type: 'regime' }));
+
+/* =============================================================================
+   Charts (small multiples sharing one year axis) and polls
+============================================================================= */
+const CHARTS = [
+  { key: 'gdp', name: 'Wealth per person', fmt: v => Math.round(v).toLocaleString() + ' cr', help: 'crowns produced per person per year' },
+  { key: 'u', name: 'Unemployment', fmt: pct, max: 0.3 },
+  { key: 's', name: 'Happiness', fmt: v => v.toFixed(2), min: 0.2, max: 0.9, help: 'average satisfaction of all needs, 0 to 1' },
+  { key: 'unrest', name: 'Unrest', fmt: pct, max: 0.3, help: 'share out protesting, striking or rising up' },
+  { key: 'gini', name: 'Inequality', fmt: v => v.toFixed(2), max: 0.6, help: 'Gini of take-home pay: 0 equal, 1 one person has everything' },
+  { key: 'C', name: 'Corruption', fmt: pct, max: 0.6 },
+];
+$('charts').innerHTML = CHARTS.map(c => `<div class="chart"><div class="hd" title="${esc(c.help || '')}"><span>${esc(c.name)}</span><b id="cv_${c.key}">–</b></div><canvas id="ch_${c.key}"></canvas></div>`).join('');
+
+function sizeCanvas(cv) {
+  const r = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+  const w = Math.max(10, Math.round(r.width * dpr)), h = Math.max(10, Math.round(r.height * dpr));
+  if (cv.width !== w || cv.height !== h) { cv.width = w; cv.height = h; }
+  return dpr;
+}
+function drawCharts() {
+  const H = world.history;
+  for (const c of CHARTS) {
+    const cv = $('ch_' + c.key), dpr = sizeCanvas(cv), ctx = cv.getContext('2d'), W = cv.width, Hh = cv.height;
+    ctx.clearRect(0, 0, W, Hh);
+    const last = H[H.length - 1];
+    $('cv_' + c.key).textContent = last ? c.fmt(last[c.key]) : '–';
+    if (H.length < 2) continue;
+    const pad = { l: 2 * dpr, r: 2 * dpr, t: 4 * dpr, b: 8 * dpr };
+    let lo = c.min ?? 0, hi = c.max ?? 0;
+    for (const h of H) hi = Math.max(hi, h[c.key]);
+    if (c.key === 'gdp') hi *= 1.08;
+    const X = i => pad.l + (W - pad.l - pad.r) * i / (H.length - 1), Y = v => pad.t + (Hh - pad.t - pad.b) * (1 - (v - lo) / (hi - lo || 1));
+    // gridline at half
+    ctx.strokeStyle = '#1f242b'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pad.l, Y((lo + hi) / 2)); ctx.lineTo(W - pad.r, Y((lo + hi) / 2)); ctx.stroke();
+    // who ruled: a strip at the bottom
+    for (let i = 0; i < H.length - 1; i++) { ctx.fillStyle = IDEOLOGIES[H[i].regime].hue; ctx.fillRect(X(i), Hh - 4 * dpr, X(i + 1) - X(i) + 0.5, 4 * dpr); }
+    ctx.strokeStyle = '#e07a9b'; ctx.lineWidth = 2 * dpr; ctx.lineJoin = 'round'; ctx.beginPath();
+    H.forEach((h, i) => { const y = Y(clamp(h[c.key], lo, hi)); i ? ctx.lineTo(X(i), y) : ctx.moveTo(X(i), y); }); ctx.stroke();
+    // revolutions marked with a thin line
+    for (let i = 1; i < H.length; i++) if (H[i].regime !== H[i - 1].regime) { ctx.fillStyle = 'rgba(232,230,225,.35)'; ctx.fillRect(X(i), pad.t, dpr, Hh - pad.t - pad.b); }
+    if (hoverYear != null) {
+      const i = H.findIndex(h => h.year === hoverYear);
+      if (i >= 0) { ctx.fillStyle = 'rgba(232,230,225,.5)'; ctx.fillRect(X(i), 0, dpr, Hh); ctx.fillStyle = '#e8e6e1'; ctx.beginPath(); ctx.arc(X(i), Y(clamp(H[i][c.key], lo, hi)), 3.5 * dpr, 0, 7); ctx.fill(); }
+    }
+    cv._X = { n: H.length, pad, W };
+  }
+  drawVotes();
+}
+function drawVotes() {
+  const cv = $('votes'), dpr = sizeCanvas(cv), ctx = cv.getContext('2d'), W = cv.width, Hh = cv.height, H = world.history;
+  ctx.clearRect(0, 0, W, Hh);
+  const ids = [], info = {};
+  for (const h of H) for (const p of h.polls) if (!info[p.id]) { info[p.id] = p; ids.push(p.id); }
+  $('votesLegend').innerHTML = ids.filter(id => world.parties.some(p => p.id === id)).map(id => `<span style="display:inline-flex;gap:6px;align-items:center"><i style="width:9px;height:9px;border-radius:2px;background:${info[id].color};display:inline-block"></i>${esc(info[id].name)}</span>`).join('')
+    || '<span>No parties right now.</span>';
+  if (H.length < 2) return;
+  const pad = { l: 2 * dpr, r: 2 * dpr, t: 2 * dpr, b: 2 * dpr };
+  const X = i => pad.l + (W - pad.l - pad.r) * i / (H.length - 1), Y = v => pad.t + (Hh - pad.t - pad.b) * (1 - v);
+  const base = new Float32Array(H.length);
+  for (const id of ids) {
+    const top = H.map((h, i) => { const p = h.polls.find(q => q.id === id); return base[i] + (p ? p.share : 0); });
+    ctx.fillStyle = info[id].color; ctx.beginPath();
+    H.forEach((h, i) => i ? ctx.lineTo(X(i), Y(top[i])) : ctx.moveTo(X(i), Y(top[i])));
+    for (let i = H.length - 1; i >= 0; i--) ctx.lineTo(X(i), Y(base[i]));
+    ctx.closePath(); ctx.fill();
+    ctx.strokeStyle = '#14171c'; ctx.lineWidth = 2 * dpr; ctx.beginPath();   // surface gap between bands
+    H.forEach((h, i) => i ? ctx.lineTo(X(i), Y(top[i])) : ctx.moveTo(X(i), Y(top[i]))); ctx.stroke();
+    top.forEach((v, i) => { base[i] = v; });
+  }
+  if (hoverYear != null) { const i = H.findIndex(h => h.year === hoverYear); if (i >= 0) { ctx.fillStyle = 'rgba(232,230,225,.6)'; ctx.fillRect(X(i), 0, dpr, Hh); } }
+  cv._X = { n: H.length, pad, W };
+}
+function chartHover(e) {
+  const cv = e.currentTarget, r = cv.getBoundingClientRect(), H = world.history;
+  if (!cv._X || H.length < 2) return;
+  const dpr = cv.width / r.width, x = (e.clientX - r.left) * dpr;
+  const i = clamp(Math.round((x - cv._X.pad.l) / (cv._X.W - cv._X.pad.l - cv._X.pad.r) * (cv._X.n - 1)), 0, H.length - 1);
+  const h = H[i]; hoverYear = h.year;
+  const tip = $('chartTip');
+  const polls = h.polls.slice().sort((a, b) => b.share - a.share).slice(0, 4).map(p => `<div><span><i style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${p.color};margin-right:5px"></i>${esc(p.name)}</span>${pct(p.share)}</div>`).join('');
+  tip.innerHTML = `<div><b>Year ${h.year}</b><span>${esc(IDEOLOGIES[h.regime].name)}</span></div>` + CHARTS.map(c => `<div><span>${esc(c.name)}</span>${c.fmt(h[c.key])}</div>`).join('') + (polls ? '<div style="margin-top:4px"><span>Polls</span></div>' + polls : '');
+  tip.style.display = 'block';
+  tip.style.left = Math.min(e.clientX + 14, innerWidth - tip.offsetWidth - 8) + 'px';
+  tip.style.top = Math.min(e.clientY + 14, innerHeight - tip.offsetHeight - 8) + 'px';
+  drawCharts();
+}
+function chartLeave() { hoverYear = null; $('chartTip').style.display = 'none'; drawCharts(); }
+for (const cv of [...CHARTS.map(c => $('ch_' + c.key)), $('votes')]) { cv.addEventListener('mousemove', chartHover); cv.addEventListener('mouseleave', chartLeave); }
+
+/* =============================================================================
+   Beliefs, systems, lobbies
+============================================================================= */
+const GROUPS = [
+  ['All', c => true], ['Workers', c => c.cls === 'worker' && c.employed], ['Jobless', c => c.cls === 'worker' && !c.employed],
+  ['Farms', c => c.cls === 'small'], ['Owners', c => c.cls === 'owner'], ['Police', c => c.cls === 'official'], ['Retired', c => c.cls === 'retired'],
+];
+function renderBeliefs() {
+  const cols = GROUPS.map(([n, f]) => [n, world.beliefs(f), world.citizens.filter(f).length]);
+  $('beliefs').innerHTML = `<thead><tr><th></th>${cols.map(([n, , k]) => `<th title="${k} people">${esc(n)}</th>`).join('')}</tr></thead><tbody>` +
+    POLICIES.map((p, i) => `<tr><th title="Law in force now: ${pct(world.P[i])}">${esc(p.name)} <span class="hint">${pct(world.P[i])}</span></th>${cols.map(([n, b, k]) => k ? `<td style="background:${div(b[i] / 0.06)}" title="${esc(n)}: ${b[i] > 0 ? 'more of this helps me' : 'more of this hurts me'} (${b[i].toFixed(3)})">${num(b[i] * 100)}</td>` : '<td style="background:#1a1d22">·</td>').join('')}</tr>`).join('') + '</tbody>';
+}
+function renderSystems() {
+  const n = world.citizens.length, favs = new Array(IDEOLOGIES.length).fill(0);
+  for (const c of world.citizens) favs[c.fav]++;
+  $('systems').innerHTML = IDEOLOGIES.map((d, k) => ({ d, k, f: favs[k] / n })).sort((a, b) => b.f - a.f).map(({ d, k, f }) =>
+    `<span title="${esc(d.blurb)}">${esc(d.name)}${k === world.regime ? ' <span class="now">IN POWER</span>' : ''}</span><span class="track"><i style="width:${f * 100}%;background:${d.hue}"></i></span><span class="v">${pct(f)}</span>`).join('');
+}
+function renderLobbies() {
+  $('lobbies').innerHTML = world.lobbies.map(l => `<div class="lcard ${selected && selected.id === l.id ? 'sel' : ''}" data-lobby="${l.id}"><b>${esc(l.name)}</b>
+    <div>${l.members || 0} members · ${Math.round(l.money).toLocaleString()} cr saved</div><div>Last year: ${esc(l.action || 'nothing yet')}</div></div>`).join('');
+}
+$('lobbies').addEventListener('click', e => { const el = e.target.closest('[data-lobby]'); if (el) select({ type: 'lobby', id: el.dataset.lobby }); });
+
+/* =============================================================================
+   Events
+============================================================================= */
+const EV_COLORS = { revolution: '#d03b3b', crisis: '#ec835a', shock: '#ec835a', election: '#3987e5', scandal: '#fab219', party: '#199e70', repress: '#9085e9', start: '#8a8f98', info: '#8a8f98' };
+let evShown = -1;
+function renderEvents() {
+  if (world.events.length === evShown && world.events.length < 400) return;
+  evShown = world.events.length;
+  $('events').innerHTML = '<div class="label" style="margin-bottom:6px">What happened</div>' + world.events.slice(-120).reverse().map(e =>
+    `<div class="ev ${e.kind === 'revolution' || e.kind === 'crisis' ? 'big' : ''}"><span class="y">Y${Math.floor(e.month / 12)}</span><i style="background:${EV_COLORS[e.kind] || '#8a8f98'}"></i><span>${esc(e.text)}</span></div>`).join('');
+}
+
+/* =============================================================================
+   Inspector: look inside a head
+============================================================================= */
+function select(s) { selected = s; renderInspector(); renderRules(); renderLobbies(); if (!running) drawMap(); }
+function hb(label, v, color, txt, title) {
+  return `<span title="${esc(title || '')}">${label}</span><span class="track"><i style="width:${clamp(v, 0, 1) * 100}%;background:${color}"></i></span><span class="v">${txt ?? pct(v)}</span>`;
+}
+function db(label, v, scale, txt, title) {
+  const x = clamp(v / scale, -1, 1) * 50;
+  const style = x >= 0 ? `left:50%;width:${x}%;background:#3987e5;border-radius:0 4px 4px 0` : `left:${50 + x}%;width:${-x}%;background:#e66767;border-radius:4px 0 0 4px`;
+  return `<span title="${esc(title || '')}">${label}</span><span class="dtrack"><i style="${style}"></i></span><span class="v">${txt ?? (v >= 0 ? '+' : '') + v.toFixed(2)}</span>`;
+}
+
+function renderInspector() {
+  const box = $('inspector');
+  if (!selected) {
+    box.innerHTML = `<h3>Look inside a head</h3><p class="sub">Click a dot on the map to see what that citizen has learned. Click a party, a lobby or the ruler (top) to see their brain.</p>
+      <p>Everyone started knowing nothing. Hunches turn into beliefs as the laws change and life gets better or worse.</p>
+      <h4>Right now</h4><div class="hbars">${hb('Out protesting', world.protestFrac, STATUS.protest)}${hb('On strike', world.strikeFrac, STATUS.strike, pct(world.strikeFrac), 'share of people with a job')}${hb('Rising up', world.riotFrac, STATUS.rise)}${hb('In jail', world.citizens.filter(c => c.jailed).length / world.citizens.length, '#5a5f68')}</div>
+      ${uprisingBalance()}`;
+    return;
+  }
+  if (selected.type === 'citizen') {
+    const c = world.citizens.find(c => c.id === selected.id);
+    if (!c) { box.innerHTML = `<h3>Gone</h3><p class="sub">This citizen has died. Their child took their place on the map.</p>`; return; }
+    box.innerHTML = citizenHTML(c);
+  } else if (selected.type === 'party') {
+    const p = world.parties.find(p => p.id === selected.id) || world.deadParties.find(p => p.id === selected.id);
+    if (!p) { selected = null; return renderInspector(); }
+    box.innerHTML = brainOwnerHTML(p, true);
+    drawBrain(p, true);
+  } else if (selected.type === 'lobby') {
+    box.innerHTML = lobbyHTML(world.lobbies.find(l => l.id === selected.id));
+  } else if (selected.type === 'regime') {
+    box.innerHTML = regimeHTML();
+    if (world.faction) drawBrain(world.faction, false);
+  }
+}
+
+function citizenHTML(c) {
+  const job = c.cls === 'worker' ? (c.employed ? `works at a ${c.firm === 'coop' ? 'workers’ co-op' : c.firm === 'state' ? 'state firm' : 'private firm'}` : 'unemployed')
+    : { small: 'runs a farm or workshop', owner: 'owns a big firm', official: 'police, soldier or official', retired: 'retired' }[c.cls];
+  const doing = c.jailed ? `in jail for ${c.jailed} more months` : ACTIONS[c.action].toLowerCase();
+  const reg = REGIONS[c.region];
+  const judge = world.judgeSystems(c, new Float32Array(IDEOLOGIES.length));
+  const sys = IDEOLOGIES.map((d, k) => ({ d, k, v: judge[k] - judge[world.regime] })).sort((a, b) => b.v - a.v);
+  const qv = world.actionValues(c);
+  const learnedRows = [1, 2, 3].map(a => `<tr><th>${ACTIONS[a]}</th>${FEATURES.map((f, k) => { const v = c.q[a * FEATURES.length + k]; return `<td style="background:${div(v / 0.5)}" title="${esc(f)}: ${v.toFixed(3)}">${num(v * 10)}</td>`; }).join('')}</tr>`).join('');
+  const parent = c.parentId ? ' · child of a local family' : '';
+  return `<h3><i style="background:${citizenColor(c)}"></i>${esc(c.name)}</h3>
+    <div class="sub">${Math.floor(c.age)} years old · ${esc(job)} · ${esc(reg.name)} (${esc(reg.kind)})${parent}<br>Right now: <b style="color:var(--text)">${esc(doing)}</b> · take-home pay ${Math.round(c.net).toLocaleString()} cr/month</div>
+    <h4>Needs <small>how well each is met, 0 to 100%. Thicker label = matters more to them</small></h4>
+    <div class="hbars">${NEEDS.map((n, k) => hb(`<span style="font-weight:${c.values[k] > 1.2 ? 600 : 400};color:${c.values[k] < 0.8 ? 'var(--muted)' : 'inherit'}">${n}</span>`, c.needs[k], c.needs[k] < 0.3 ? '#e66767' : '#e07a9b', null, `weight ${c.values[k].toFixed(2)}`)).join('')}
+      ${hb('<b>Satisfaction</b>', c.s, '#e8e6e1', c.s.toFixed(2))}</div>
+    <h4>What they believe each law does for them <small>learned from their own life: +more of this law makes my life better</small></h4>
+    <div class="hbars">${POLICIES.map((p, i) => db(p.name, c.w[i], 0.3, null, `law now at ${pct(world.P[i])}`)).join('')}</div>
+    <h4>Which system they would choose <small>compared with the one in power (0)</small></h4>
+    <div class="hbars">${sys.slice(0, 5).map(({ d, k, v }) => db(d.name + (k === world.regime ? ' ✓' : ''), v, 0.6, null, Number.isNaN(c.memory[k]) ? 'never lived under it' : `remembers satisfaction ${c.memory[k].toFixed(2)}`)).join('')}</div>
+    <p>${c.fav === world.regime ? 'Happy enough with the current system.' : `Would rather live under <b style="color:var(--text)">${esc(IDEOLOGIES[c.fav].name)}</b>.`} Lived under: ${IDEOLOGIES.filter((d, k) => !Number.isNaN(c.memory[k])).map(d => esc(d.name)).join(', ') || 'only this'} (some from family stories).</p>
+    <h4>When acting feels worth it <small>learned weights: blue = pushes them to act, red = holds them back</small></h4>
+    <table class="mini"><thead><tr><th></th>${FEATURES.map(f => `<th>${esc(f.replace('Believes in another system', 'Cause').replace('Police strength', 'Police').replace('Crowd nearby', 'Crowd'))}</th>`).join('')}</tr></thead><tbody>${learnedRows}</tbody></table>
+    <div class="hbars" style="margin-top:8px">${ACTIONS.map((a, k) => db(a, qv[k], 0.4, null, 'how good this looks to them right now')).join('')}</div>
+    <p class="hint">Arrested ${c.arrests} time${c.arrests === 1 ? '' : 's'} · took part in ${c.revolutions} revolution${c.revolutions === 1 ? '' : 's'}.</p>
+    ${world.parties.length ? `<h4>Trust in parties <small>grows when life gets better while a party governs; scandals destroy it</small></h4>
+    <div class="hbars">${world.parties.map(p => db(`<span style="color:${p.color}">■</span> ${esc(p.name)}`, c.trust[p.id] || 0, 1)).join('')}</div>
+    <p>Would vote for: <b style="color:var(--text)">${esc((world.parties.find(p => p.id === c.voteIntent) || { name: 'nobody' }).name)}</b></p>` : ''}`;
+}
+
+function brainOwnerHTML(p, isParty) {
+  const gov = isParty && world.government.parties.includes(p.id);
+  const dead = isParty && !world.parties.includes(p);
+  const cons = p.conscience, presses = ['Gagged press', 'Some press freedom', 'Free press'];
+  const bribeRows = presses.map((n, s) => {
+    const no = cons[s * 2], yes = cons[s * 2 + 1];
+    const tried = p.bribes || p.scandals || no || yes;
+    return `<span>${n}</span><span class="hint">${tried ? (yes >= no ? '<b style="color:#fab219">takes them</b>' : '<b style="color:#8a8f98">refuses</b>') : 'no experience'}</span><span class="v">${(yes - no).toFixed(2)}</span>`;
+  }).join('');
+  const scores = p.poolScores || [];
+  const best = scores.length ? Math.max(...scores) : 0;
+  const hist = isParty ? p.history.slice(-8).map(h => `<span class="pill">Y${Math.floor(h[0] / 12)}: ${pct(h[1])}</span>`).join('') : '';
+  return `<h3>${isParty ? `<i style="background:${p.color}"></i>` : ''}${esc(p.name)}</h3>
+    <div class="sub">${isParty ? `${esc(p.family)} (where its promises have drifted) · founded year ${Math.floor(p.founded / 12)}${dead ? ' · <b>dissolved</b>' : ''}<br>${p.seats} seats · last vote ${pct(p.share)} · polls ${pct(p.poll || 0)}${gov ? ' · <b style="color:var(--hue)">in government</b>' : ''}`
+      : `Rules Veyland · approval ${pct(p.approval)}`}<br>${p.generation} round${p.generation === 1 ? '' : 's'} of learning · ${Math.round(p.money).toLocaleString()} cr in the bank</div>
+    <h4>Promises vs the law now <small>dot = what it promises · grey line = the law in force</small></h4>
+    <div class="hbars">${POLICIES.map((q, i) => `<span>${esc(q.name)}</span><span class="promise"><span class="cur" style="left:${world.P[i] * 100}%"></span><span class="pro" style="left:${p.platform[i] * 100}%;background:${isParty ? p.color : '#e07a9b'}"></span></span><span class="v">${pct(p.platform[i])}</span>`).join('')}</div>
+    <h4>Its brain <small>what it sees (left) → promises (right). Orange = positive link, blue = negative</small></h4>
+    <canvas id="brain"></canvas>
+    <h4>${isParty ? 'Last primary' : 'Last power struggle'} <small>${isParty ? 'six versions of the brain tested in a poll; the winner leads, the next six are its variations' : world.ideology.rule === 'experts' ? 'six plans tested on the economic model' : 'six factions tested on their supporters (police count 3×)'}</small></h4>
+    <div class="hbars">${scores.length ? scores.map((s, i) => hb(`Candidate ${i + 1}${s === best ? ' ★' : ''}`, best > 0 ? s / best : 0, s === best ? (isParty ? p.color : '#e07a9b') : '#3a3f47', s.toFixed(2))).join('') : '<span class="hint" style="grid-column:1/-1">Not tested yet.</span>'}</div>
+    <h4>Has it learned to take bribes? <small>learned from whether taking them later won or lost support</small></h4>
+    <div class="hbars">${bribeRows}</div>
+    <p class="hint">Took ${p.bribes} bribe${p.bribes === 1 ? '' : 's'} · caught ${p.scandals} time${p.scandals === 1 ? '' : 's'}.</p>
+    ${hist ? `<h4>Elections</h4><div>${hist}</div>` : ''}`;
+}
+
+function drawBrain(p, isParty) {
+  const cv = $('brain'); if (!cv) return;
+  const dpr = sizeCanvas(cv), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
+  const net = new Brain.Network(BRAIN_SIZES, p.brain);
+  const inputs = world._inputs(isParty ? p.share : p.approval, isParty ? p.govShare > 0 : true);
+  net.forward(inputs);
+  const sizes = BRAIN_SIZES, lx = [84 * dpr, W * 0.47, W - 112 * dpr];
+  const pos = sizes.map((n, l) => Array.from({ length: n }, (_, j) => [lx[l], 10 * dpr + (H - 20 * dpr) * (n === 1 ? 0.5 : j / (n - 1))]));
+  ctx.clearRect(0, 0, W, H);
+  let i = 0;
+  for (let l = 1; l < sizes.length; l++) for (let j = 0; j < sizes[l]; j++) {
+    for (let q = 0; q < sizes[l - 1]; q++) {
+      const w = net.params[i++], a = Math.min(1, Math.abs(w) / 1.5);
+      if (a < 0.05) continue;
+      ctx.strokeStyle = w > 0 ? `rgba(255,106,61,${a * 0.8})` : `rgba(57,135,229,${a * 0.8})`; ctx.lineWidth = (0.5 + a * 1.5) * dpr;
+      ctx.beginPath(); ctx.moveTo(pos[l - 1][q][0], pos[l - 1][q][1]); ctx.lineTo(pos[l][j][0], pos[l][j][1]); ctx.stroke();
+    }
+    i++;   // bias
+  }
+  ctx.font = `${10 * dpr}px system-ui, sans-serif`;
+  for (let l = 0; l < sizes.length; l++) for (let j = 0; j < sizes[l]; j++) {
+    const v = net.acts[l][j], [x, y] = pos[l][j];
+    ctx.fillStyle = v >= 0 ? mix('#2a2f37', '#ff6a3d', Math.min(1, v)) : mix('#2a2f37', '#3987e5', Math.min(1, -v));
+    ctx.beginPath(); ctx.arc(x, y, 5 * dpr, 0, 7); ctx.fill();
+    ctx.strokeStyle = '#0f1215'; ctx.lineWidth = 1.5 * dpr; ctx.stroke();
+    ctx.fillStyle = '#8a8f98';
+    if (l === 0) { ctx.textAlign = 'right'; ctx.fillText(INPUT_NAMES[j], x - 9 * dpr, y + 3 * dpr); }
+    if (l === 2) { ctx.textAlign = 'left'; ctx.fillText(POLICIES[j].name, x + 9 * dpr, y + 3 * dpr); }
+  }
+}
+
+function lobbyHTML(l) {
+  const states = ['No elections · gagged press', 'No elections · free press', 'Elections · gagged press', 'Elections · free press'];
+  const acts = ['Save', 'Donate', 'Bribe'];
+  const st = (world.ideology.rule === 'elections' ? 2 : 0) + (world.P[L.liberty] > 0.5 ? 1 : 0);
+  const rows = states.map((n, s) => `<tr><th>${n}${s === st ? ' ←' : ''}</th>${acts.map((a, k) => { const v = l.q[s * 3 + k]; return `<td style="background:${div(v / 0.5)}" title="${a}: ${v.toFixed(3)}">${num(v * 10)}</td>`; }).join('')}</tr>`).join('');
+  const w = l.avgW || new Float32Array(POLICIES.length);
+  return `<h3>${esc(l.name)}</h3>
+    <div class="sub">Speaks for ${l.members || 0} ${esc({ owner: 'owners of big firms', worker: 'workers', small: 'farmers and shopkeepers' }[l.cls])} · ${Math.round(l.money).toLocaleString()} cr saved from members' dues<br>Last year: ${esc(l.action || 'nothing yet')}</div>
+    <h4>What its members believe helps them <small>the average of what they have each learned</small></h4>
+    <div class="hbars">${POLICIES.map((p, i) => db(p.name + (i === l.top ? ' ★' : ''), w[i], 0.3)).join('')}</div>
+    <p>It pushes for <b style="color:var(--text)">${esc(POLICIES[l.top].name.toLowerCase())} ${l.dir > 0 ? 'up' : 'down'}</b>, the law its members care about most.</p>
+    <h4>What it has learned works <small>how much each choice later helped members, by situation</small></h4>
+    <table class="mini"><thead><tr><th></th>${acts.map(a => `<th>${a}</th>`).join('')}</tr></thead><tbody>${rows}</tbody></table>
+    <h4>Recent moves</h4><div>${l.log.slice(-10).reverse().map(([m, t]) => `<div class="hint">Y${Math.floor(m / 12)} · ${esc(t)}</div>`).join('') || '<span class="hint">None yet.</span>'}</div>`;
+}
+
+function uprisingBalance() {
+  const a = world.attack || 0, d = world.defence || 1, tot = Math.max(1, a + d);
+  return `<h4>Balance of force <small>people (and police) acting for another system vs those defending this one. Rebels win if they stay stronger for three months running.</small></h4>
+    <div class="hbars">${hb('Want change', a / tot, STATUS.rise, Math.round(a))}${hb('Defend it', d / tot, '#3987e5', Math.round(d))}</div>`;
+}
+
+function regimeHTML() {
+  const d = world.ideology;
+  const locks = Object.entries(d.lock).map(([k, [lo, hi]]) => `<span class="pill">${esc(POLICIES[L[k]].name)} ${lo > 0 ? '≥ ' + pct(lo) : '≤ ' + pct(hi)}</span>`).join('');
+  const how = {
+    elections: 'Parties win seats in proportion to their votes (101 seats, at least 4% to get in). The biggest party forms a government with the parties whose promises are closest to its own until it has a majority. Laws move slowly toward what the government promised.',
+    party: 'One party rules. Every year its factions compete: each faction is a version of the ruling brain, tested by how its plan would go down with the regime’s supporters, with police and soldiers counting three times. The winner’s plan becomes law.',
+    experts: 'Experts rule. Every year they test six plans on their economic model and pick the one that forecasts the most satisfaction and output. They know the model but not what people feel.',
+    councils: 'Workers’ councils vote on every law. Whenever a clear majority of workers, farmers, officials and pensioners believe more (or less) of a law would help them, it changes. Owners have no vote.',
+    assembly: 'Everyone votes on every law. Whenever a clear majority believes more (or less) of a law would help them, it changes.',
+  }[d.rule];
+  const f = world.faction;
+  return `<h3><i style="background:${d.hue}"></i>${esc(d.name)}</h3><div class="sub">${esc(d.blurb)}</div>
+    <h4>How laws are made</h4><p>${esc(how)}</p>
+    <h4>Laws this system forces</h4><div>${locks || '<span class="hint">Only free speech must stay.</span>'}</div>
+    ${uprisingBalance()}
+    <h4>History</h4><div>${world.regimeLog.map(r => `<span class="pill" style="border-color:${IDEOLOGIES[r.regime].hue}">Y${Math.floor(r.month / 12)} ${esc(IDEOLOGIES[r.regime].name)}${r.how === 'coup' ? ' (coup)' : r.how === 'revolution' ? ' (revolution)' : ''}</span>`).join('')}</div>
+    ${f ? '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">' + brainOwnerHTML(f, false) + '</div>' : ''}`;
+}
+
+/* =============================================================================
+   Loop
+============================================================================= */
+let lastSlow = 0;
+function renderAll(full) {
+  $('year').textContent = Math.floor(world.month / 12);
+  $('month').textContent = MONTHS[world.month % 12];
+  drawMap();
+  const now = performance.now();
+  if (full || now - lastSlow > 450) {
+    lastSlow = now;
+    renderRules(); drawCharts(); renderEvents(); mapLegend();
+    renderBeliefs(); renderSystems(); renderLobbies(); renderInspector();
+  }
+}
+function frame(t) {
+  const dt = Math.min(0.25, (t - last) / 1000); last = t;
+  if (running && !busy) {
+    acc += dt * speed * 6;           // 1× = 6 months per second (2 seconds a year)
+    const t0 = performance.now();
+    while (acc >= 1 && performance.now() - t0 < 40) { world.step(); acc -= 1; }
+    if (acc > 3) acc = 3;
+  }
+  if (!busy) renderAll(false);
+  requestAnimationFrame(frame);
+}
+
+async function skip(years) {
+  if (busy) return;
+  busy = true;
+  const ov = $('overlay'); ov.style.display = 'grid';
+  const end = world.month + years * 12;
+  while (world.month < end) {
+    const t0 = performance.now();
+    while (world.month < end && performance.now() - t0 < 30) world.step();
+    ov.textContent = `Year ${Math.floor(world.month / 12)}…`;
+    await new Promise(r => setTimeout(r, 0));
+  }
+  ov.style.display = 'none'; busy = false;
+  renderAll(true);
+}
+
+/* ---------- controls ---------- */
+function setRunning(on) { running = on; $('play').textContent = on ? 'Pause' : 'Play'; $('play').classList.toggle('go', on); }
+$('play').onclick = () => setRunning(!running);
+document.addEventListener('keydown', e => { if (e.code === 'Space' && e.target === document.body) { e.preventDefault(); setRunning(!running); } });
+$('speeds').onclick = e => { const b = e.target.closest('button'); if (!b) return; speed = +b.dataset.s; [...$('speeds').children].forEach(x => x.classList.toggle('on', x === b)); };
+$('skip10').onclick = () => skip(10);
+$('skip50').onclick = () => skip(50);
+document.querySelectorAll('[data-shock]').forEach(b => b.onclick = () => { world.shock(b.dataset.shock); renderAll(true); });
+$('colorBy').onclick = e => { const b = e.target.closest('button'); if (!b) return; colorBy = b.dataset.c; [...$('colorBy').children].forEach(x => x.classList.toggle('on', x === b)); mapLegend(); drawMap(); };
+$('helpBtn').onclick = () => $('help').classList.toggle('open');
+$('startSel').innerHTML = IDEOLOGIES.map(d => `<option value="${d.id}">${esc(d.name)}</option>`).join('');
+$('startSel').onchange = () => { $('startBlurb').textContent = IDEOLOGIES.find(d => d.id === $('startSel').value).blurb; };
+$('newBtn').onclick = () => { $('startSel').value = startAs; $('startSel').onchange(); $('seedIn').value = 1 + Math.floor(Math.random() * 99999); $('newDlg').showModal(); };
+$('newCancel').onclick = () => $('newDlg').close();
+$('newGo').onclick = () => { $('newDlg').close(); newWorld(Math.max(1, Math.floor(+$('seedIn').value) || 1), $('startSel').value); };
+window.addEventListener('resize', () => { resizeMap(); seatSpots = null; renderAll(true); });
+
+newWorld(seed, startAs);
+resizeMap();
+requestAnimationFrame(frame);
+</script>
+</body>
+</html>
