@@ -189,6 +189,10 @@ const ENVS = [
     desc: 'The goal: the same learning bodies in 3D, running a civilization together. Built on what Embodied 2D proves out.',
     agents: 'TBD', learns: 'Neuroevolution (motor control)', goal: 'Build a civilization',
     href: 'projects/embodied-3d/index.html', cta: 'Planned', status: 'dev' },
+  { id: 'politics', name: 'Politics', hue: '#e07a9b', tags: ['Society'], preview: 'assets/previews/politics.webp',
+    desc: 'A made-up country of 600 citizens who learn which laws help them, vote, protest, strike or rise up. Parties evolve their promises in polls, lobbies learn to bribe, and when life gets bad enough people revolt into communism, syndicalism, mutualism, fascism and more.',
+    agents: '600 citizens · parties · lobbies', learns: 'Q-learning, evolution, learned beliefs', goal: 'Win votes, or a better life',
+    href: 'projects/politics/index.html', cta: 'Enter Veyland' },
 ];
 
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
