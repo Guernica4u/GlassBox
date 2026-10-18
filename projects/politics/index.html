@@ -141,7 +141,8 @@
   .promise .goal { position: absolute; top: 0; width: 12px; height: 12px; border-radius: 50%; margin-left: -6px; border: 2px solid; box-sizing: border-box; opacity: .8; }
   .promise .lane { position: absolute; top: 3px; height: 6px; border-radius: 3px; opacity: .22; }
   #pmap { width: 100%; height: 210px; display: block; margin-top: 10px; cursor: pointer; }
-  .pcard .why { grid-column: 2 / 4; margin-top: -3px; font-size: 11.5px; color: var(--muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .pcard .why { grid-column: 2 / 4; margin-top: -3px; font-size: 11.5px; color: var(--muted); }
+  .pcard .nm { white-space: normal; }
   .pill { display: inline-block; border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; font-size: 12px; color: var(--muted); margin: 0 4px 4px 0; }
   .hint { color: var(--faint); font-size: 12.5px; }
   #brain { width: 100%; height: 250px; display: block; background: #0f1215; border-radius: 6px; }
@@ -345,7 +346,7 @@ function baseWords(a) {
 /** What a party stands for, in words: its core laws, high or low. */
 function coreWords(p) {
   const a = KIND[p.arch]; if (!a) return '';
-  return a.lane.map(i => `${p.core[i] >= 0.5 ? '\u2191' : '\u2193'} ${POLICIES[i].name.toLowerCase()}`).join(' · ');
+  return a.lane.map(i => `${p.core[i] >= 0.58 ? '\u2191' : p.core[i] <= 0.42 ? '\u2193' : '~'} ${POLICIES[i].name.toLowerCase()}`).join(' · ');
 }
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
@@ -689,7 +690,7 @@ function renderRules() {
     <div class="pcard ${selected && selected.id === p.id ? 'sel' : ''}" data-party="${p.id}"><i style="background:${p.color}"></i>
       <span class="nm">${esc(p.name)}${gov.has(p.id) ? '<span class="gov">GOV</span>' : ''}${partyBadges(p)} <small>· ${esc(KIND[p.arch] ? KIND[p.arch].label : p.family)}</small></span>
       <span class="num">${p.seats} seats · polls ${pct(p.poll || 0)}</span>
-      ${KIND[p.arch] ? `<span></span><span class="why" title="What it stands for, and who it speaks for">${esc(coreWords(p))} · for ${esc(baseWords(KIND[p.arch]).slice(0, 2).join(', '))}</span>` : ''}
+      ${KIND[p.arch] ? `<span></span><span class="why" title="What it stands for (↑ more, ↓ less, ~ middling) · who it speaks for">${esc(coreWords(p))} · for ${esc(baseWords(KIND[p.arch]).slice(0, 2).join(', '))}</span>` : ''}
       ${p.leader ? `<span></span><span class="hint" style="grid-column:2/4;margin-top:-2px">led by ${esc(p.leader.name)}${p.leader.charisma > 0.4 ? ' · charismatic' : p.leader.charisma < -0.4 ? ' · uninspiring' : ''}${(p.leader.ambition || 0) > 0.45 ? ' · power-hungry' : ''}</span>` : ''}</div>`).join('');
   drawPartyMap();
   $('constBox').innerHTML = constitutionHTML();
@@ -747,13 +748,14 @@ function drawPartyMap() {
   labels.sort((p, q) => p.y - q.y);
   for (let i = 0; i < labels.length; i++) {
     const l = labels[i]; l.w = ctx.measureText(l.text).width;
+    if (l.x + l.w > W - 2 * dpr) l.x = Math.max(2 * dpr, W - 2 * dpr - l.w);
     for (let j = 0; j < i; j++) { const o = labels[j]; if (Math.abs(o.y - l.y) < 11 * dpr && l.x < o.x + o.w && o.x < l.x + l.w) l.y = o.y + 11 * dpr; }
     ctx.fillText(l.text, l.x, Math.min(H - 4 * dpr, l.y));
   }
 }
 $('pmap').addEventListener('click', e => {
   const b = $('pmap').getBoundingClientRect(), x = e.clientX - b.left, y = e.clientY - b.top;
-  const hit = pmapSpots.find(s => (s.x - x) ** 2 + (s.y - y) ** 2 <= s.r ** 2);
+  const hit = pmapSpots.slice().reverse().find(s => (s.x - x) ** 2 + (s.y - y) ** 2 <= s.r ** 2);   // (the last drawn is on top)
   if (hit) select({ type: 'party', id: hit.id });
 });
 function partyBadges(p) {
@@ -779,7 +781,8 @@ function constitutionHTML() {
   if (d.electoral && world.erosion > 0.01) {
     const by = world.parties.find(p => p.id === world.erosionBy);
     const why = { auth: 'campaigns to end the system', strongman: 'is a strongman party', outsider: 'is an outsider movement in power', cult: 'has built a cult around its leader', emergency: 'rules by emergency decree', dominant: 'has been in power too long', captured: 'is in the pocket of big money' }[world.erosionWhy] || 'is eroding the rules';
-    html += `<b style="color:#fab219">Democracy under strain: ${pct(world.erosion)} eroded.</b> ${by ? esc(by.name) : 'The government'} ${esc(why)}: packing the courts and leaning on the press. ${d.guided ? 'At 100% elections end.' : `At ${pct(Politics.SOFT_COUP)} it rewrites the constitution (a "soft coup"); at 100% elections end.`} Mass protests slow it; losing power reverses it.<br>`;
+    if (!by || !world.government.parties.includes(by.id)) html += `<b style="color:#fab219">Democracy recovering: ${pct(world.erosion)} eroded.</b> The courts and the press are slowly regaining their independence.<br>`;
+    else html += `<b style="color:#fab219">Democracy under strain: ${pct(world.erosion)} eroded.</b> ${by ? esc(by.name) : 'The government'} ${esc(why)}: packing the courts and leaning on the press. ${d.guided ? 'At 100% elections end.' : `At ${pct(Politics.SOFT_COUP)} it rewrites the constitution (a "soft coup"); at 100% elections end.`} Mass protests slow it; losing power reverses it.<br>`;
   }
   if (d.electoral) {
     const warn = [];
@@ -789,7 +792,7 @@ function constitutionHTML() {
     if (plot > 0.3) warn.push(`<b style="color:${plot > 0.6 ? '#d03b3b' : '#fab219'}">The army is ${plot > 0.6 ? 'plotting a coup' : 'restless'}.</b> Unhappy officers and a weak-looking government make a plot grow; a free press may expose it.`);
     if (world.monarch) { const am = world.monarch.ambition || 0; warn.push(`${esc(world.monarch.name)} ${am < 0 ? 'believes in parliament and would refuse to sign a strongman\u2019s decrees' : am > 0.45 ? '<b style="color:#fab219">dreams of real power</b> and might side with a coup' : 'keeps out of politics'}.`); }
     const dom = world.parties.find(p => p.id === world.dominant);
-    if (d.guided && dom) warn.push(`<b>Ruling party: ${esc(dom.name)}.</b> It gets state TV, patronage and a padded count; rivals need 7% to win seats. If it falls below 40 seats and behind another party, democracy breaks through.`);
+    if (d.guided && dom) warn.push(`<b>Ruling party: ${esc(dom.name)}.</b> It gets state TV, patronage and a padded count; rivals need 7% to win seats. It always leads the government. If it falls below 40 seats and behind another party, or loses its majority and the opposition unites, democracy breaks through; so can months of mass protest.`);
     if (warn.length) html += warn.join('<br>') + '<br>';
   }
   if (d.electoral) {
@@ -1190,9 +1193,9 @@ function brainOwnerHTML(p, isParty) {
     <h4>Big choices <small>two extra outputs of its brain; above 70% means yes</small></h4>
     <div class="hbars">${isParty ? hb('New system', p.platform[OUT_CHANGE], world.pushesChange(p.platform) ? '#e07a9b' : '#3a3f47', pct(p.platform[OUT_CHANGE]), 'campaign to change the whole system') : ''}${hb('Go to war', p.platform[OUT_WAR], world.wantsWar(p.platform) ? '#d03b3b' : '#3a3f47', pct(p.platform[OUT_WAR]))}</div>
     <p>${isParty ? (world.pushesChange(p.platform) ? `Campaigns to make Veyland a <b style="color:var(--text)">${esc(IDEOLOGIES[world.aimOf(p.platform, p)].name.toLowerCase())}</b>${KIND[p.arch] && KIND[p.arch].aim ? '' : ' (the system its promises come closest to)'}.` : 'Not campaigning to change the system.') + ' ' : ''}${world.wantsWar(p.platform) ? (world.war ? 'Wants to keep fighting.' : `Wants war with ${NEIGHBOUR}.`) : (world.war ? 'Wants peace.' : 'Wants peace with ' + NEIGHBOUR + '.')}${isParty && p.region != null ? ` Stands only in ${esc(REGIONS[p.region].name)}${p.homeShare != null ? ` (won ${pct(p.homeShare)} there)` : ''}.` : ''}</p>
-    <h4>Promises vs the law now <small>dot = what it promises · ${isParty && p.core ? 'ring = what it stands for · ★ = its core laws (it never strays outside the band) · ' : ''}grey line = the law in force</small></h4>
+    <h4>Promises vs the law now <small>dot = what it promises · ${isParty && p.core ? 'ring = what it stands for · ★ = its core laws (it never strays outside the band, unless the system forbids it) · ' : ''}grey line = the law in force</small></h4>
     <div class="hbars">${POLICIES.map((q, i) => { const lane = isParty && KIND[p.arch] && KIND[p.arch].lane.includes(i);
-      return `<span>${esc(q.name)}${lane ? ' ★' : ''}</span><span class="promise">${lane ? `<span class="lane" style="left:${Math.max(0, p.core[i] - 0.12) * 100}%;width:${(Math.min(1, p.core[i] + 0.12) - Math.max(0, p.core[i] - 0.12)) * 100}%;background:${p.color}"></span>` : ''}<span class="cur" style="left:${world.P[i] * 100}%"></span>${isParty && p.core ? `<span class="goal" style="left:${p.core[i] * 100}%;border-color:${p.color}"></span>` : ''}<span class="pro" style="left:${p.platform[i] * 100}%;background:${isParty ? p.color : '#e07a9b'}"></span></span><span class="v">${pct(p.platform[i])}</span>`; }).join('')}</div>
+      return `<span>${esc(q.name)}${lane ? ' ★' : ''}</span><span class="promise">${lane ? `<span class="lane" style="left:${Math.max(world._lo(i), p.core[i] - 0.12) * 100}%;width:${Math.max(0, Math.min(world.ideology.hi[i], p.core[i] + 0.12) - Math.max(world._lo(i), p.core[i] - 0.12)) * 100}%;background:${p.color}"></span>` : ''}<span class="cur" style="left:${world.P[i] * 100}%"></span>${isParty && p.core ? `<span class="goal" style="left:${p.core[i] * 100}%;border-color:${p.color}"></span>` : ''}<span class="pro" style="left:${p.platform[i] * 100}%;background:${isParty ? p.color : '#e07a9b'}"></span></span><span class="v">${pct(p.platform[i])}</span>`; }).join('')}</div>
     <h4>Its brain <small>what it sees (left) → promises (right). Orange = positive link, blue = negative</small></h4>
     <canvas id="brain"></canvas>
     <h4>${isParty ? 'Last primary' : 'Last power struggle'} <small>${isParty ? 'six versions of the brain tested in a poll; the winner leads, the next six are its variations' : world.ideology.rule === 'experts' ? 'six plans tested on the economic model' : 'six factions tested on their supporters (police count 3×)'}</small></h4>
@@ -1209,10 +1212,10 @@ function partyRootsHTML(p) {
   const share = f => voters.filter(f).length / n, base = f => world.citizens.filter(f).length / all;
   const rows = Object.entries(CLASS_WORDS).map(([k, w]) => db(w[0].toUpperCase() + w.slice(1), share(c => c.cls === k) - base(c => c.cls === k), 0.5, `${pct(share(c => c.cls === k))}`, `${pct(share(c => c.cls === k))} of its voters, ${pct(base(c => c.cls === k))} of everyone`)).join('');
   const devout = share(c => c.religious > 0.5), loyal = share(c => c.pid === p.id && c.pidS > 0.4);
-  const regs = REGIONS.map((r, k) => [r.name, share(c => c.region === k) / Math.max(0.01, base(c => c.region === k))]).sort((x, y) => y[1] - x[1]);
+  const regs = REGIONS.map((r, k) => [r.name, share(c => c.region === k) / Math.max(0.01, base(c => c.region === k)), k]).filter(x => world.inVeyland(x[2])).sort((x, y) => y[1] - x[1]);
   const enemies = a.enemies.map(e => KIND[e].label.toLowerCase()).join(', ');
   return `<h4>Its roots <small>every party is founded as a kind of party, for a group of people; it learns its promises but never drops its core laws</small></h4>
-    <p>${esc(a.label)}: stands for ${esc(coreWords(p))}. Speaks for ${esc(baseWords(a).slice(0, 4).join(', '))}.${a.aim ? ` Campaigns to make Veyland a ${esc(IDEOLOGIES.find(d => d.id === a.aim).name.toLowerCase())}.` : ''}${enemies ? ` Will not govern with ${esc(enemies)}.` : ''}</p>
+    <p>${esc(a.label)}: stands for ${esc(coreWords(p))}. Speaks for ${esc(baseWords(a).slice(0, 4).join(', '))}.${a.aim ? (IDEOLOGIES[world.regime].id === a.aim ? ' Veyland already has the system it wanted.' : ` Campaigns to make Veyland a ${esc(IDEOLOGIES.find(d => d.id === a.aim).name.toLowerCase())}.`) : ''}${enemies ? ` Will not govern with ${esc(enemies)}.` : ''}</p>
     ${voters.length ? `<h4>Who voted for it <small>${voters.length} people last time · blue = more than in the country as a whole, red = fewer</small></h4>
     <div class="hbars">${rows}${db('Devout', devout - base(c => c.religious > 0.5), 0.5, pct(devout))}${hb('Loyal for years', loyal, p.color, pct(loyal), 'Vote for it out of habit: it would take a lot to change their minds')}</div>
     <p class="hint">Strongest in ${esc(regs[0][0])}${regs[0][1] > 1.3 ? ` (${regs[0][1].toFixed(1)}× its national level)` : ''}, weakest in ${esc(regs[regs.length - 1][0])}.</p>` : ''}`;
@@ -1272,7 +1275,7 @@ function uprisingBalance() {
 
 function howWords(r) {
   return { coup: ' (coup)', putsch: ' (army coup)', royalcoup: ' (royal coup)', revolution: ' (revolution)', reform: ' (peaceful)', restored: ' (restored)',
-    selfcoup: IDEOLOGIES[r.regime].guided ? ' (soft coup)' : ' (self-coup)' }[r.how] || '';
+    selfcoup: IDEOLOGIES[r.regime].guided ? ' (soft coup)' : IDEOLOGIES[r.regime].id === 'absmon' ? ' (royal coup)' : IDEOLOGIES[r.regime].id === 'plutocracy' ? ' (state capture)' : ' (self-coup)' }[r.how] || '';
 }
 function regimeHTML() {
   const d = world.ideology;
@@ -1287,8 +1290,8 @@ function regimeHTML() {
     wealth: 'Parties win seats as in a democracy, but each vote counts by how much the voter earns: an owner’s vote can count thirty times a jobless worker’s. Parties learn to court the rich.',
     lottery: 'Every two years 51 citizens are picked at random, like a jury, to form the assembly. Whenever a clear majority of them believe more (or less) of a law would help them, it changes. No parties, no campaigns.',
     clergy: 'The Lantern Church’s Council of Elders rules. Every year factions of elders compete, tested on how their plans would go down with the faithful (church members count three times) and the police.',
-  }[d.rule] + (d.monarch ? ' A monarch reigns as head of state: the crown gives the system extra loyalty.' : '')
-    + (d.guided ? ' But the elections are managed: the ruling party gets state TV, patronage and a padded count, and rivals need 7% to win seats. If it still falls below 40 seats and behind a rival, democracy breaks through.' : '')
+  }[d.rule].replace(d.elective ? /When the monarch dies[^.]*\./ : /$^/, '') + (d.monarch ? ' A monarch reigns as head of state: the crown gives the system extra loyalty.' : '')
+    + (d.guided ? ' But the elections are managed: the ruling party gets state TV, patronage and a padded count, and rivals need 7% to win seats. If it still falls below 40 seats and behind a rival, or loses its majority and the opposition unites, democracy breaks through; so can months of mass protest.' : '')
     + (d.elective ? ' When a monarch dies the Electoral Diet of great families and provinces elects the next one from another house.' : '')
     + (d.personal ? ' Everything depends on one person: when the Leader dies, heirs and generals fight over what is left.' : '');
   const f = world.faction;
