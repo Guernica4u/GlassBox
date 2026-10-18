@@ -1175,7 +1175,7 @@ class World {
       if (d.guided && this.parties.length) {   // the strongest party (or the old rulers, turned into a party) becomes the ruling party
         const lead = this.parties.slice().sort((a, b) => (b.seats || 0) - (a.seats || 0))[0];
         this.dominant = lead.id;
-        if (!IDEOLOGIES[from].electoral) { lead.name = oldFaction ? oldFaction.name : d.faction; if (oldFaction && oldFaction.leader && !oldFaction.leader.royal) lead.leader = oldFaction.leader; }
+        if (!IDEOLOGIES[from].electoral && how === 'reform') { lead.name = oldFaction ? oldFaction.name : d.faction; if (oldFaction && oldFaction.leader && !oldFaction.leader.royal) lead.leader = oldFaction.leader; }
         this.log(`${lead.name} will run the country. Other parties may stand, but the state is on its side.`, 'politics');
       }
     } else {
@@ -1393,8 +1393,8 @@ class World {
     if (core) u += SYM_W * clamp(HOPE * sym, -1, 1);   // sympathy with what the party stands for
     if (party.arch && party.region == null) u += AFF_W * c.aff[AIDX[party.arch]];         // "people like me vote for them"
     if (c.pid === party.id) u += PID_W * c.pidS;                                           // "we have always voted for them"
-    if (party.govSince != null) u -= Math.min(FATIGUE_MAX, FATIGUE * Math.max(0, (this.month - party.govSince) / 12 - 4));   // "time for a change"
     else if (c.pidArch && c.pidArch === party.arch) u += 0.5 * PID_W * c.pidS;              // a new party of the family's kind
+    if (party.govSince != null) u -= Math.min(FATIGUE_MAX, FATIGUE * Math.max(0, (this.month - party.govSince) / 12 - 4));   // "time for a change"
     if (party.leader) u += 0.25 * party.leader.charisma;                      // a likeable (or awful) leader
     const age = (this.month - (party.relaunched ?? party.founded)) / 12;
     if (c.age < 35 && age > 30) u -= 0.2 * Math.min(1, (age - 30) / 40);       // the young drift away from their grandparents' parties
@@ -1404,7 +1404,7 @@ class World {
     if (grudge > 0.1) {   // hard times: "the old parties have failed us"
       const mine = clamp(6 * (c.sRef - c.s) + (c.cls === 'worker' && !c.employed ? 0.4 : 0) + 0.3, 0, 1) * grudge;
       if (party.govShare > 0) u -= 0.5 * mine;
-      if (party.outsider) u += 0.8 * mine;
+      else if (party.outsider) u += 0.8 * mine;
       else if (party.arch && ARCHETYPES[AIDX[party.arch]].aim) u += 0.4 * mine;   // "only a new system can fix this"
     }
     u += 0.3 * taste(c.id, party.id);                                          // personal taste: a candidate they like, a family habit
@@ -1585,17 +1585,19 @@ class World {
     // (a democratic breakthrough: the ruling party of a guided system loses so badly that even the rigged count cannot save it)
     // (or loses its majority, and the opposition unites against it)
     const crushed = domK >= 0 && seats[domK] < 40 && Math.max(...seats.filter((_, k) => k !== domK)) > seats[domK];
+    let broke = false;
     if (domK >= 0 && (crushed || (seats[domK] < 51 && r() < 0.5))) {
+      broke = true;
       const dom = this.parties[domK], to = this._freeAgain();
       this.log(`Democratic breakthrough! Despite the managed count, ${dom.name} wins only ${seats[domK]} of 101 seats${crushed ? '' : ' and the opposition unites against it'}. It concedes, and Veyland becomes a ${IDEOLOGIES[to].name.toLowerCase()} again.`, 'reform');
       this._changeRegime(to, 'reform');
     }
     // 6. coalition: biggest party gathers the closest partners until it has a majority
     const wasGov = new Set(this.government ? this.government.parties : []);
-    const gov = this._formGovernment([]);
+    const gov = broke ? [] : this._formGovernment([]);   // (after a breakthrough a caretaker runs the country until a free founding election)
     const names = gov.map(p => `${p.name} (${p.seats})`).join(' + ');
     this.elections.push({ month: this.month, turnout: turnN / this.citizens.length, results: this.parties.map((p, k) => ({ id: p.id, name: p.name, color: p.color, share: shares[k], seats: seats[k] })), gov: this.government.parties.slice() });
-    this.log(`Election${this.ideology.rule === 'wealth' ? ' (votes counted by wealth)' : ''}: ${Math.round(100 * turnN / this.citizens.length)}% turnout. ${gov.length > 1 ? 'Coalition' : 'Government'}: ${names}.`, 'election');
+    this.log(`Election${this.ideology.rule === 'wealth' ? ' (votes counted by wealth)' : ''}: ${Math.round(100 * turnN / this.citizens.length)}% turnout. ${broke ? 'A caretaker government calls a free election in six months.' : `${gov.length > 1 ? 'Coalition' : 'Government'}: ${names}.`}`, 'election');
     // 7. evolution: keep the winning candidate, try variations, borrow from rivals
     for (const party of this.parties) {
       // a bad result, or losing power, often costs the leader their job
@@ -1625,11 +1627,11 @@ class World {
     this._maybeSplit();
     this._maybeMerge();
     if (this.ideology.guided && !this.parties.some(p => p.id === this.dominant)) this.dominant = this.parties.slice().sort((a, b) => b.seats - a.seats)[0].id;
-    this.nextElection = this.month + 48;
+    if (!broke) this.nextElection = this.month + 48;
     // 9. war or peace, if the new government wants it
     this._warPolicy();
     // 10. changing the system itself, and provinces voting on independence
-    this._constitution();
+    if (!broke) this._constitution();
     if (this.ideology.electoral) this._independenceVotes();
   }
 
@@ -1648,7 +1650,10 @@ class World {
       if ((q.outsider || lead.outsider) && this.rng() > 0.25 + this.crisis) continue;   // a cordon around the outsider
       gov.push(q); have += q.seats;
     }
-    if (have < 51) { this.gridlock += 0.5; this.log(`Hung parliament: no group of parties can agree on a majority. ${lead.name} governs alone with ${have} of 101 seats.`, 'politics'); }
+    if (have < 51 && !exclude.length) {
+      this.gridlock += 0.5;
+      this.log(`Hung parliament: no group of parties can agree on a majority. ${gov.length > 1 ? `${gov.map(q => q.name).join(' + ')} govern as a minority` : `${lead.name} governs alone`} with ${have} of 101 seats.`, 'politics');
+    }
     for (const p of this.parties) if (!gov.includes(p)) p.govSince = null; else if (p.govSince == null) p.govSince = this.month;
     const target = new Float32Array(NP);
     for (const q of gov) { q.govShare = q.seats / Math.max(1, have); for (let k = 0; k < NP; k++) target[k] += q.platform[k] * q.govShare; }
@@ -1668,9 +1673,9 @@ class World {
     }
     if (g.parties.length < 2) return;
     const gov = this.parties.filter(p => g.parties.includes(p.id));
-    const lead = gov.slice().sort((a, b) => b.seats - a.seats)[0];
+    const lead = this._lead() || gov.slice().sort((a, b) => b.seats - a.seats)[0];
     for (const p of gov) {
-      if (p === lead) continue;
+      if (p === lead || p.id === this.dominant) continue;
       const scandal = this.lastScandal && this.lastScandal.party === lead.id && this.month - this.lastScandal.month <= 2;
       const risk = 0.002 + (p.poll < 0.6 * p.share ? 0.012 : 0) + (scandal ? 0.12 : 0);
       if (this.rng() > risk) continue;
@@ -1917,6 +1922,7 @@ class World {
   _honeymoon() { return clamp((this.month - this.regimeSince) / (12 * HONEYMOON), 0.35, 1); }
   _lead() {
     const g = this.government; if (!g || g.caretaker) return null;
+    if (this.ideology.guided && g.parties.includes(this.dominant)) return this.parties.find(p => p.id === this.dominant) || null;
     let b = null; for (const p of this.parties) if (g.parties.includes(p.id) && (!b || p.seats > b.seats)) b = p;
     return b;
   }
@@ -2007,12 +2013,12 @@ class World {
       const yrs = Math.min(this.month - lead.leader.since, this.month - (lead.govSince ?? this.month)) / 12;
       const auth = this.pushesChange(pl) && AUTHORITARIAN.has(this.aimOf(pl, lead));
       const strongman = pl[L.liberty] <= d.lo[L.liberty] + 0.05 && pl[L.police] >= 0.6;   // (the system's usual floor, not the eroded one)
-      capt = this.lobbies.find(l => l.friend === lead.id && this.press[l.id] >= 0.1 && this.C > 0.12 && lead.bribes - (lead.bribesAtElection || 0) >= 2);
+      capt = this.lobbies.find(l => l.id === 'industry' && l.friend === lead.id && this.press[l.id] >= 0.1 && this.C > 0.12 && lead.bribes - (lead.bribesAtElection || 0) >= 2);
       if (auth) { why = 'auth'; rate = 0.11; to = this.aimOf(pl, lead); }
       else if (strongman && lead.seats >= 40) { why = 'strongman'; rate = 0.1; }
       else if (lead.outsider && amb > 0.3) { why = 'outsider'; rate = 0.12; }
       else if (lead.leader.charisma > 0.7 && amb > 0.35 && yrs >= 6) { why = 'cult'; rate = 0.08 + 0.04 * lead.leader.charisma; }
-      else if (this.emergency && this.emergency.by === lead.id && amb > 0) { why = 'emergency'; rate = 0.1; }
+      else if (this.emergency && this.emergency.by === lead.id && this.emergency.renewals >= 1 && amb > 0.3) { why = 'emergency'; rate = 0.1; }
       else if (lead.seats >= 67 && amb > 0.45 && this.month - (lead.govSince ?? this.month) >= 96) { why = 'dominant'; rate = 0.07; }
       else if (capt && d.rule !== 'wealth') { why = 'captured'; rate = 0.08; to = IDX.plutocracy; }
     }
@@ -2024,10 +2030,14 @@ class World {
           strongman: `Democracy under strain: ${lead.name}, led by ${L0}, begins packing the courts and leaning on the press.`,
           outsider: `Democracy under strain: in power, the outsider ${L0} fires judges, puts friends in charge of the broadcaster and calls critics "enemies of the people".`,
           cult: `Cult of personality: portraits of ${L0} hang in every school and office. ${lead.name} calls its leader the Guardian of the Nation; critics are called traitors.`,
-          emergency: `Democracy under strain: ${lead.name} uses its emergency powers against the opposition. Newspapers are shut and protest leaders detained.`,
+          emergency: `Democracy under strain: ${lead.name} uses its emergency powers against the opposition. Critical newspapers are shut and protest leaders detained.`,
           dominant: `Democracy under strain: after ${yrs} years in power with ${lead.seats} of 101 seats, ${lead.name} fills the courts, the civil service and the election board with its own people.`,
           captured: `State capture: the ${capt ? capt.name : 'lobby'} owns much of the press and has ${lead.name} in its pocket. Laws are written in its boardrooms.`,
         }[why], 'politics');
+        if (why === 'emergency') {   // (and it does what it says)
+          const x = 0.2 * this.press.independent; this.press.independent -= x; this.press.state += x;
+          for (const c of this.citizens) if (c.action && !c.jailed && this.rng() < 0.2) { c.jailed = 6 + Math.floor(this.rng() * 7); c.action = 0; c.arrests++; }
+        }
       }
       this.erosionBy = lead.id; this.erosionWhy = why; this.erosionTo = to;
       this.erosion = Math.min(1, this.erosion + this._honeymoon() * Math.max(0, rate + 0.12 * this.fear - 0.5 * this.protestFrac) / 12);
@@ -2052,7 +2062,7 @@ class World {
       const strongman = lead.platform[L.liberty] <= d.lo[L.liberty] + 0.05 && lead.platform[L.police] >= 0.6;
       let to = this.erosionTo;   // an anti-system party's own system, or the oligarchs' plutocracy
       if (royal) to = IDX.absmon;
-      if (to < 0 || to === this.regime) {
+      if (to < 0 || to === this.regime || (d.guided && IDEOLOGIES[to].electoral)) {
         // the left slides into a popular republic, the rest into a guided democracy (populists go where their promises point)
         if (!d.guided) to = LA && (LA.id === 'populist' ? axes(lead.platform)[0] > 0.5 : LEFT_KINDS.has(LA.id)) ? IDX.popular : IDX.guided;
         else if (LA && LA.coupIdx != null && LA.coupIdx !== this.regime) to = LA.coupIdx;
@@ -2066,8 +2076,8 @@ class World {
         this._changeRegime(to, 'selfcoup'); this.dominant = lead.id;
         return;
       }
-      this.log(this.erosionWhy === 'captured' ? `State capture complete: ${name} changes the constitution so that votes count by wealth. Veyland becomes a plutocracy.`
-        : royal ? `Royal coup! ${m.name} sides with ${name}, dissolves parliament and rules by decree. Veyland becomes an absolute monarchy.`
+      this.log(royal ? `Royal coup! ${m.name} sides with ${name}, dissolves parliament and rules by decree. Veyland becomes an absolute monarchy.`
+        : this.erosionWhy === 'captured' && to === IDX.plutocracy ? `State capture complete: ${name} changes the constitution so that votes count by wealth. Veyland becomes a plutocracy.`
         : `Self-coup! After years of eroding the rules, ${name} suspends elections. Veyland becomes a ${IDEOLOGIES[to].name.toLowerCase()} without a shot fired.`, 'revolution');
       this._changeRegime(to, 'selfcoup');
       if (this.faction && IDEOLOGIES[to].rule !== 'crown') { this.faction.name = name; this.faction.leader = leader; }
@@ -2135,7 +2145,7 @@ class World {
     if (win) {
       let to = b.crown ? IDX.absmon : IDX.junta, top = -1;
       for (let k = 0; k < NI; k++) if (k !== this.regime && (top < 0 || want[k] > want[top])) top = k;
-      if (!b.crown && top >= 0 && want[top] >= 0.4 * plotters.length && IDEOLOGIES[top].rule !== 'crown') to = top;   // the plotters' own cause
+      if (!b.crown && top >= 0 && want[top] >= 0.4 * plotters.length && IDEOLOGIES[top].rule !== 'crown' && !IDEOLOGIES[top].electoral) to = top;   // the plotters' own cause
       this.log(`Coup! At dawn, tanks surround parliament in Oldbridge. ${Math.round(100 * join / n)}% of officers back ${who}${helped ? `, helped by ${helped}` : ''}. The ${I.name} falls.`, 'revolution');
       this._changeRegime(to, b.crown ? 'royalcoup' : 'putsch');
       if (this.faction) this.log(`The ${this.faction.name} under ${b.crown ? m.name : this.faction.leader.name} dissolves parliament and bans all parties "until order is restored".`, 'repress');
@@ -2191,6 +2201,7 @@ class World {
 
   _replaceLeader(holder, why) {
     const old = holder.leader;
+    if (holder.outsider) holder.outsider = false;   // without its founder, an outsider movement becomes an ordinary party
     holder.leader = this._newLeader(holder === this.faction ? 45 : 38);
     this.log(`${old.name} ${why}. ${holder.leader.name} takes over.`, 'leader');
   }
@@ -2440,7 +2451,7 @@ class World {
     } else if (this.faction && this.month % 12 === (this.regimeSince + 6) % 12) {
       this._factionContest();
     }
-    if (d.electoral && this.month >= this.nextElection) this._election();
+    if (d.electoral && this.month >= this.nextElection) { this._election(); if (this.regime !== IDX[d.id]) return; }   // (the system just changed)
     if (!d.electoral && this.month % 3 === 0) {
       this._peacefulPressure();
       if (this.regime !== IDX[d.id]) return;     // the system just changed
@@ -3535,7 +3546,7 @@ class World {
       for (const c of w.citizens || []) { if (!c.aff) { c.aff = new Float32Array(NAR); w._refreshAff(c, true); } if (c.pid === undefined) { c.pid = null; c.pidArch = null; c.pidS = 0; } }
       for (const p of [...(w.parties || []), ...(w.deadParties || [])]) if (!p.arch) {
         let best = ARCHETYPES[0], bd = Infinity;
-        for (const a of ARCHETYPES) { if (a.regional !== (p.region != null)) continue; let d = 0; for (let q = 0; q < NP; q++) d += (p.platform[q] - a.ideal[q]) ** 2; if (d < bd) { bd = d; best = a; } }
+        for (const a of ARCHETYPES) { if (!!a.regional !== (p.region != null)) continue; let d = 0; for (let q = 0; q < NP; q++) d += (p.platform[q] - a.ideal[q]) ** 2; if (d < bd) { bd = d; best = a; } }
         p.arch = best.id; p.core = Float32Array.from(p.platform.subarray(0, NP));
       }
       if (!Array.isArray(w.citizens) || !w.citizens.length) throw new Error('no citizens');
