@@ -334,10 +334,10 @@ const NR = REGIONS.length;
    enemies: parties it will not govern with; aim: the system an anti-system party campaigns for. */
 const ARCHETYPES = [
   { id: 'labour', label: 'Labour', family: 'Social democrats', core: { wage: .65, unions: .7, welfare: .6 },
-    base: { cls: { worker: 1, retired: .3 }, comm: { unionclub: 1.5 }, reg: { Ironvale: .4, Highcombe: .4 } },
+    base: { cls: { worker: .6, retired: .3 }, comm: { unionclub: 1.5 }, reg: { Ironvale: .4, Highcombe: .4 } },
     names: ['Veyland Labour', 'Party of the Forge', "Workers' Commonwealth", 'Hearth and Hammer', 'Social Labour Union', 'Furnace Labour'], enemies: ['business', 'antitax', 'iron'] },
   { id: 'socialist', label: 'Socialists', family: 'Socialists', coup: 'communism', core: { state: .65, tax: .65, wage: .75 },
-    base: { cls: { worker: .7 }, jobless: .5, comm: { redguards: 1.5, unionclub: .8, students: .6 } },
+    base: { cls: { worker: .5 }, jobless: .5, comm: { redguards: 1.5, unionclub: .8, students: .6 } },
     names: ['Commons Party', 'Red Furnace League', 'Party of Common Ownership', 'Socialist Commonwealth'], enemies: ['business', 'antitax', 'nationalist', 'iron'] },
   { id: 'revolutionary', label: 'Revolutionary communists', family: 'Communists', coup: 'communism', core: { state: .9, coops: .05, liberty: .3, faith: .05 }, aim: 'communism',
     base: { comm: { redguards: 2.5, students: .4 }, jobless: .8, cls: { worker: .3 }, unhappy: .6 },
@@ -355,7 +355,7 @@ const ARCHETYPES = [
     base: { comm: { students: .8, secularists: 1.2, newcomers: .5 }, reg: { Oldbridge: .5, Saltmere: .3 }, rel: -.4 },
     names: ['Civic Liberals', 'Open Society Party', "Free Citizens' Union", 'Oldbridge Liberals'], enemies: ['nationalist', 'church', 'iron', 'theocrat'] },
   { id: 'conservative', label: 'Conservatives', family: 'Conservatives', coup: 'junta', core: { police: .6, tax: .3, faith: .45 },
-    base: { cls: { owner: .8, small: .5, retired: .5, official: .4 }, comm: { veterans: .6, church: .4 }, rel: .4 },
+    base: { cls: { owner: .8, small: .6, retired: .6, official: .5 }, comm: { veterans: .6, church: .4 }, rel: .5, old: .3 },
     names: ['Conservative Union', 'Old Charter Party', 'Party of Order and Hearth', 'Veyland Conservatives'], enemies: ['socialist', 'revolutionary', 'syndicalist'] },
   { id: 'church', label: 'Lantern democrats', family: 'Religious democrats', coup: 'theocracy', core: { faith: .75, welfare: .5 },
     base: { comm: { church: 1.2, revivalists: 2 }, reg: { Redfield: .3, Fenwick: .3 }, rel: 1.2 },
@@ -370,7 +370,7 @@ const ARCHETYPES = [
     base: { comm: { greens: 2, students: .8, peace: .6 }, young: .5, reg: { Fenwick: .3 } },
     names: ['Green Alliance', 'Party of the Forests', 'Clean Rivers League', 'Living Land Party'], enemies: ['business', 'antitax'] },
   { id: 'nationalist', label: 'Nationalists', family: 'Nationalists', coup: 'fascism', core: { police: .8, trade: .2, autonomy: .1 },
-    base: { comm: { patriots: 2, veterans: 1 }, cls: { official: .3 }, jobless: .3 },
+    base: { comm: { patriots: 2, veterans: 1 }, cls: { official: .3, worker: .3 }, jobless: .5 },
     names: ['Veyland First', 'Homeland Party', 'Patriotic Union', 'Banner of Veyland'], enemies: ['regionalist', 'liberal', 'socialist', 'newcomer', 'revolutionary'] },
   { id: 'iron', label: 'National renewal (far right)', family: 'Fascists', coup: 'fascism', core: { police: .95, unions: .05, liberty: .15, autonomy: .05 }, aim: 'fascism',
     base: { comm: { patriots: 2.5, veterans: .6 }, jobless: .6, cls: { official: .3 }, unhappy: .6 },
@@ -423,7 +423,7 @@ ARCHETYPES.forEach(a => {
   a.coupIdx = a.coup ? IDX[a.coup] : null; if (a.coup && a.coupIdx == null) throw new Error('kind of party ' + a.id + ': unknown coup ' + a.coup);
 });
 // kinds of party on the left (an eroding one of these turns a democracy into a popular republic rather than a guided democracy)
-const LEFT_KINDS = new Set(['labour', 'socialist', 'revolutionary', 'syndicalist', 'coop', 'populist', 'pensioner', 'green', 'peace']);
+const LEFT_KINDS = new Set(['labour', 'socialist', 'revolutionary', 'syndicalist', 'coop', 'pensioner', 'green', 'peace']);
 const enemies = (a, b) => !!(a && b && (ARCHETYPES[AIDX[a]].enemies.includes(b) || ARCHETYPES[AIDX[b]].enemies.includes(a)));
 /** Where a set of promises sits on two simple axes: economy (0 = free market, 1 = state & unions) and authority (0 = free, 1 = controlled). */
 function axes(v) {
@@ -471,13 +471,15 @@ const FEATURES = ['Always', 'Unhappy', 'Crowd nearby', 'Police strength', 'Belie
 const NF = FEATURES.length;
 const CAUTION = 0.15;        // how risky voters find big changes to a law
 const HOPE = 10;            // how strongly an expected change in satisfaction sways a choice
-const ENV = typeof process !== 'undefined' && process.env ? process.env : {};
-const VOTE_CAUTION = +(ENV.VC ?? 0.04);  // at the ballot box a change of law feels less risky than in daily life (a promise is not yet a law)
+const VOTE_CAUTION = 0.04;  // at the ballot box a change of law feels less risky than in daily life (a promise is not yet a law)
 const LANE = 0.12;          // how far a party may stray from its core beliefs on the laws it was founded for
 const PURITY = 0.5;         // how much party activists punish candidates who drift from what the party stands for
-const SYM_W = +(ENV.SYM ?? 0.6), AFF_W = +(ENV.AFF ?? 0.5), PID_W = +(ENV.PID ?? 0.6), BASE_W = 0.6;   // what the party stands for · "one of us" · voting habit · the home base in primaries
-const SOFT_COUP = +(ENV.SOFT ?? 0.7);   // how far a democracy erodes before its rulers rewrite the constitution (at 1 they end elections)
-const FATIGUE = +(ENV.FAT ?? 0.08), FATIGUE_MAX = +(ENV.FATMAX ?? 0.6);   // "time for a change": voters tire of a party that has governed for years
+const SYM_W = 0.6, AFF_W = 0.5, PID_W = 0.6, BASE_W = 0.6;   // what the party stands for · "one of us" · voting habit · the home base in primaries
+const FATIGUE = 0.08, FATIGUE_MAX = 0.6;   // "time for a change": voters tire of a party that has governed for years
+const SOFT_COUP = 0.7;      // how far a democracy erodes before its rulers rewrite the constitution (at 1 they end elections)
+const FRAGILE = 1;          // scales the events that strain a democracy (colonels, fires, trolls, outsiders)
+const COUP_BAR = 0.1;       // how sour the officers and how weak the government must be before a coup plot grows
+const HONEYMOON = 15;       // years during which a young democracy's plots and power grabs grow more slowly
 
 /* =============================================================================
    The world
@@ -541,7 +543,7 @@ class World {
     // fragile democracy: hard times, gridlock, emergency rule, the army's mood; the democracy that fell (so it can come back)
     this.crisis = 0; this.gridlock = 0; this.emergency = null; this.erosionWhy = null; this.erosionTo = -1; this.fear = 0;
     this.army = { plot: 0, mood: 0, weak: 0, warned: -999, purged: -999, last: -999, backers: {} };
-    this.fallen = null; this.slump = 0; this.terror = -999;
+    this.fallen = null; this.slump = 0; this.terror = -999; this.bubble = null;
     // provinces: 'province', 'autonomous' (its own assembly and language rights) or 'independent' (left Veyland)
     this.regionStatus = REGIONS.map(() => 'province');
     this.indepSupport = new Float32Array(NR); this.boom = new Float32Array(NR); this.langBan = new Float32Array(NR);
@@ -1911,6 +1913,8 @@ class World {
      Slow death: a government erodes the rules (a strongman, an outsider, emergency rule, a personality cult,
      a party too long in power, oligarchs). Sudden death: a coup (the army, the crown, foreign or oligarch money).
      Resistance: protests, courts, a free press, a loyal army, a monarch who refuses. Dictatorships born this way can end. */
+  /** A young democracy's honeymoon: for its first fifteen years plots and power grabs grow more slowly. */
+  _honeymoon() { return clamp((this.month - this.regimeSince) / (12 * HONEYMOON), 0.35, 1); }
   _lead() {
     const g = this.government; if (!g || g.caretaker) return null;
     let b = null; for (const p of this.parties) if (g.parties.includes(p.id) && (!b || p.seats > b.seats)) b = p;
@@ -2026,7 +2030,7 @@ class World {
         }[why], 'politics');
       }
       this.erosionBy = lead.id; this.erosionWhy = why; this.erosionTo = to;
-      this.erosion = Math.min(1, this.erosion + Math.max(0, rate + 0.12 * this.fear - 0.5 * this.protestFrac) / 12);
+      this.erosion = Math.min(1, this.erosion + this._honeymoon() * Math.max(0, rate + 0.12 * this.fear - 0.5 * this.protestFrac) / 12);
       // a constitutional monarch can refuse to sign
       const m = this.monarch;
       if (m && this.erosion > 0.4 && (m.ambition || 0) < 0 && this.month % 12 === 0 && this.rng() < 0.35) {
@@ -2049,7 +2053,8 @@ class World {
       let to = this.erosionTo;   // an anti-system party's own system, or the oligarchs' plutocracy
       if (royal) to = IDX.absmon;
       if (to < 0 || to === this.regime) {
-        if (!d.guided) to = LA && LEFT_KINDS.has(LA.id) ? IDX.popular : IDX.guided;   // the left slides into a popular republic, the rest into a guided democracy
+        // the left slides into a popular republic, the rest into a guided democracy (populists go where their promises point)
+        if (!d.guided) to = LA && (LA.id === 'populist' ? axes(lead.platform)[0] > 0.5 : LEFT_KINDS.has(LA.id)) ? IDX.popular : IDX.guided;
         else if (LA && LA.coupIdx != null && LA.coupIdx !== this.regime) to = LA.coupIdx;
         else to = strongman ? IDX.personal : nearest(HARD_TARGETS);
       }
@@ -2072,7 +2077,7 @@ class World {
   /** The army: unhappy officers plus a government that looks weak make a coup plot grow. */
   _armyStep(crime) {
     const a = this.army, P = this.P, r = this.rng, g = this.government, lead = this._lead();
-    if (this.month - this.regimeSince < 48) { a.plot = 0; return; }   // a new order has just put its own people in charge of the army
+    if (this.month - this.regimeSince < (isFree(this.regime) ? 96 : 48)) { a.plot = 0; return; }   // a new order has just put its own people in charge of the army (a new democracy: eight years)
     let n = 0, sour = 0, auth = 0;
     for (const c of this.citizens) if (c.cls === 'official' && !c.jailed) {
       n++; sour += clamp((0.64 - c.s) / 0.2, 0, 1);
@@ -2092,7 +2097,7 @@ class World {
     a.mood = (sour + 2 * auth) / n + cut + lost + red + (a.backers.foreign ? 0.2 : 0) + (a.backers.crown ? 0.15 : 0) - (this.month - a.purged < 120 ? 0.3 : 0);
     a.weak = 0.25 * Math.min(4, this.gridlock) + (g.caretaker || g.minority ? 0.3 : 0) + this.crisis + 5 * this.riotFrac + 2 * this.protestFrac + 2 * crime
       + (this.war && this.war.score < -0.3 ? 0.4 : 0) - 2 * (this.meanS - 0.62);
-    a.plot = clamp(a.plot * 0.92 + Math.min(0.25, 2 * (Math.max(0, a.mood) * a.weak - 0.05)), 0, 1.2);
+    a.plot = clamp(a.plot * 0.92 + this._honeymoon() * Math.min(0.25, 2 * (Math.max(0, a.mood) * a.weak - COUP_BAR)), 0, 1.2);
     if (a.plot > 0.5 && this.month - a.warned > 60) {
       a.warned = this.month;
       const why = lost ? 'the lost war' : cut ? 'cuts to the army' : red ? 'a government they call "red"' : this.gridlock > 1.5 ? 'endless squabbling in parliament' : this.crisis > 0.4 ? 'the economy' : 'disorder in the streets';
@@ -2757,7 +2762,8 @@ class World {
       memAll(-0.02); const k = Math.floor(r() * NR); if (this.inVeyland(k)) this.hurt[k] = clamp(this.hurt[k] + 0.05, 0, 1);
       log('A political prisoner dies in police custody. Huge crowds gather at the funeral.', 'unrest');
     }
-    if (this.faction && this.faction.approval < 0.4 && jailed > 0.03 && r() < 0.01) {
+    if (this.faction && this.faction.approval < 0.4 && jailed > 0.03 && r() < 0.01 && this.month - (this.news.amnesty ?? -999) >= 24) {
+      this.news.amnesty = this.month;
       const n = cits.filter(c => c.jailed).length; for (const c of cits) c.jailed = 0; memAll(0.01);
       log(`Amnesty: the ${this.faction.name.replace(/^The /, '')} frees ${n} prisoners, hoping to calm the country.`, 'politics');
     }
@@ -2817,6 +2823,386 @@ class World {
         log(harsh ? `The authorities tear down the statue of ${cu.hero} in ${REGIONS[k].name}. ${cu.people} are furious.` : `A statue of ${cu.hero} is unveiled in ${REGIONS[k].name}.`, 'culture');
       }
     }
+    this._lifeEvents(RG, reg);
+  }
+  /** Everyday politics, fragile democracy, money troubles, society, life under a dictatorship, the provinces.
+      Cheap checks first; per-citizen loops only when an event fires. */
+  _lifeEvents(RG, reg) {
+    const r = this.rng, P = this.P, d = this.ideology, cits = this.citizens, year = 12 * this.Ytot, m = this.month;
+    const anyone = () => true, log = (t, k) => this.log(t, k), gov = () => this.parties.filter(p => p.govShare > 0);
+    const hurtAll = x => { for (let k = 0; k < NR; k++) this.hurt[k] = clamp(this.hurt[k] + x, 0, 1); };
+    const memAll = x => { for (const c of cits) if (!Number.isNaN(c.memory[this.regime])) c.memory[this.regime] += x; };
+    const bump = (k, x) => { if (this.inVeyland(k)) this.boom[k] = Math.min(1, this.boom[k] + x); };
+    const trust = (p, x, who) => { if (p) for (const c of cits) if (!who || who(c)) c.trust[p.id] = clamp((c.trust[p.id] || 0) + x, -1, 1); };
+    const trustGov = (x, who) => { for (const p of gov()) trust(p, x, who); };
+    const gap = (key, n) => { if (m - (this.news[key] ?? -9999) < n) return false; this.news[key] = m; return true; };   // at most once per n months
+    const pick = a => a[Math.floor(r() * a.length)];
+    const live = () => REGIONS.map((_, k) => k).filter(k => this.inVeyland(k));
+    const erode = x => { this.erosion = clamp(this.erosion + x, 0, 0.97); };   // (only _erosionStep may finish the job)
+    const g = this.government, lead = this._lead(), f = this.faction, elect = !!(d.electoral && g && !g.caretaker && lead);
+    const opp = elect ? this.parties.filter(p => p.govShare === 0 && p.seats > 0).sort((a, b) => b.seats - a.seats) : [];
+    const grudge = this.crisis + 0.1 * Math.min(3, this.gridlock), amb = lead ? lead.leader.ambition || 0 : 0;
+    const noun = () => this._newLeader(35).name;
+
+    /* ---- A. everyday political life ---- */
+    // A1 MPs dump a governing leader who is sinking in the polls
+    if (elect && (lead.poll ?? lead.share) < 0.7 * lead.share && m - lead.leader.since > 24 && r() < 0.02) {
+      trust(lead, 0.04);
+      this._replaceLeader(lead, `is toppled by ${lead.name}'s own MPs, who fear for their seats with the party at ${Math.round(100 * lead.poll)}% in the polls`);
+    }
+    // A2 rebels in a slim majority vote with the opposition: no confidence, snap election
+    if (elect && !g.minority && g.seats < 58 && this.nextElection - m > 9 && m - g.since > 12
+      && r() < 0.003 + 0.01 * this.crisis + (this.lastScandal && m - this.lastScandal.month < 3 ? 0.03 : 0)) {
+      const n = g.seats - 50 + Math.floor(r() * 3);
+      this.gridlock += 1; this.nextElection = m + 2;
+      log(`No confidence! ${n} rebel MPs of ${lead.name} vote with the opposition, and the government falls by ${101 - g.seats + n} votes to ${g.seats - n}. A snap election is called.`, 'politics');
+    }
+    // A3 a minister on trial for corruption: free courts convict, captured courts acquit
+    if (elect && this.C > 0.05 && r() < 0.004 * P[L.liberty] * (0.5 + 5 * this.C)) {
+      const p = pick(gov()), who = noun(), free = this.erosion < 0.3;
+      if (free) { trust(p, -0.12); this.C *= 0.85; } else { memAll(-0.02); erode(0.03); }
+      log(free ? `Corruption trial: ${who}, a minister from ${p.name}, is jailed for taking kickbacks on road contracts. The courts show they still bite.`
+        : `Corruption trial: ${who}, a minister from ${p.name}, is cleared by judges the government appointed. Hardly anyone believes the verdict.`, 'scandal');
+    }
+    // A4 the great TV debate a month before the vote: one leader shines, one stumbles
+    if (elect && this.nextElection - m === 1 && P[L.liberty] > 0.5 && this.parties.length >= 2 && r() < 0.6) {
+      const top = this.parties.slice().sort((a, b) => (b.poll || 0) - (a.poll || 0));
+      const [win, lose] = r() < sig(2 * (top[0].leader.charisma - top[1].leader.charisma)) ? top : [top[1], top[0]];
+      trust(win, 0.06); trust(lose, -0.04); win.leader.charisma = clamp(win.leader.charisma + 0.1, -1, 1);
+      log(`The great TV debate: ${win.leader.name} (${win.name}) runs rings around ${lose.leader.name} (${lose.name}), whose ${pick(['blank look when asked the price of bread', 'clumsy joke about pensioners', 'angry outburst at a nurse in the audience'])} is replayed all week.`, 'election');
+    }
+    // A5 a TV celebrity founds a party against "the whole lot of them"
+    if (elect && P[L.liberty] > 0.5 && this.parties.length < 8 && this.nextElection - m > 12 && r() < 0.0015 * FRAGILE * (0.5 + 3 * grudge) && !this.parties.some(p => p.outsider)) {
+      const p = this._foundParty(null, null, 'populist');
+      if (p) {
+        p.outsider = true; p.leader.charisma = 0.7 + 0.3 * r(); p.leader.ambition = 0.3 + 0.6 * r();
+        for (const c of cits) if (c.sRef - c.s > 0 || c.age < 35) c.trust[p.id] = 0.15 + 0.1 * r();
+        log(`${p.leader.name}, host of Veyland's most watched game show, founds ${p.name}. "I'm not a politician, and that's the point."`, 'party');
+      }
+    }
+    // A6 a stormy party congress: purists or pragmatists win the fight over what the party is for
+    if (elect && r() < 0.006) {
+      const p = pick(this.parties.filter(q => q.core && q.arch && q.share > 0.08));
+      if (p) {
+        const A = ARCHETYPES[AIDX[p.arch]], pure = r() < 0.5 + 0.5 * this.crisis;
+        for (let j = 0; j < A.lane.length; j++) { const k = A.lane[j]; p.core[k] = clamp(p.core[k] + (pure ? 0.6 : -0.3) * (A.laneVal[j] - p.core[k]) + (pure ? 0.08 * Math.sign(A.laneVal[j] - P[k]) : 0), 0.02, 0.98); }
+        trust(p, pure ? -0.03 : 0.02);
+        if (pure && r() < 0.5) this._replaceLeader(p, `is voted out by a stormy ${p.name} congress that wants a leader who really believes in ${POLICIES[A.lane[0]].name.toLowerCase()}`);
+        else log(`${p.name} congress: ${pure ? 'the purist wing wins the vote and drags the party back to its roots' : 'the pragmatists win, and the party softens its old demands to reach the middle ground'}.`, 'party');
+      }
+    }
+    // A7 MPs cross the floor: to the government (sweeteners rumoured), or out of it
+    if (elect && opp.length && r() < 0.004) {
+      const toGov = r() < 0.4 + 2 * this.C + (this.erosionBy === lead.id ? 0.3 : 0);
+      const from = toGov ? pick(opp) : pick(gov()), to = toGov ? lead : opp[0], n = Math.min(from.seats, 1 + Math.floor(r() * 4));
+      if (n > 0 && from !== to) {
+        from.seats -= n; to.seats += n; g.seats += toGov ? n : -n; g.minority = g.seats < 51;
+        log(`${n} MP${n > 1 ? 's' : ''} of ${from.name} cross${n > 1 ? '' : 'es'} the floor to ${to.name}${toGov ? (this.C > 0.08 ? ', amid rumours of envelopes stuffed with cash' : '') : ', saying the government has lost its way'}. The government now has ${g.seats} of 101 seats${g.minority ? ' and no majority' : ''}.`, 'politics');
+      }
+    }
+    // A8 leaked e-mails show a lobby writing a party's plans
+    if (elect && P[L.liberty] > 0.6 && this.press.independent > 0.3 && r() < 0.003) {
+      const l = pick(this.lobbies.filter(x => x.friend && this.parties.some(p => p.id === x.friend)));
+      if (l) {
+        const p = this.parties.find(q => q.id === l.friend);
+        trust(p, -0.08); l.money *= 0.5; this.press[l.id] *= 0.7;
+        log(`Lobbying exposé: leaked e-mails show the ${l.name} drafting ${p.name}'s plans on ${POLICIES[l.top].name.toLowerCase()} word for word. "Nothing illegal," says the party.`, 'scandal');
+      }
+    }
+    // A9 a long general strike ends at the ministry: a deal, or troops break it
+    if (this.strikeFrac > 0.04 && r() < 0.2 && gap('strikedeal', 24)) {
+      const deal = d.electoral || P[L.unions] > 0.35;
+      if (deal) {
+        this.target[L.wage] = clamp(this.target[L.wage] + 0.06, 0, 1); this.target[L.unions] = clamp(this.target[L.unions] + 0.04, 0, 1);
+        P[L.wage] = clamp(P[L.wage] + 0.03, this._lo(L.wage), d.hi[L.wage]); trustGov(0.04, c => c.cls === 'worker');
+      } else { this.target[L.police] = clamp(this.target[L.police] + 0.05, 0, 1); memAll(-0.02); }
+      log(deal ? `After ${Math.round(this.strikeFrac * 100)}% of workers walk out, unions, employers and ministers sign a deal at dawn: a higher minimum wage and a say for unions on the shop floor.`
+        : 'The strike is broken: soldiers drive the trains and strike leaders are sacked. Workers go back sullen and angry.', 'unrest');
+    }
+    // A10 budget deadlock: a weak government cannot pass its budget; state pay arrives late
+    if (elect && (g.minority || this.gridlock > 1.5) && m % 12 === 10 && r() < 0.25 && gap('budget', 36)) {
+      this.payFactor = Math.min(this.payFactor, 0.9); this.gridlock += 0.3; trustGov(-0.03);
+      log(`Budget deadlock: parliament votes down ${lead.name}'s budget. Civil servants, soldiers and pensioners are paid late this winter.`, 'politics');
+    }
+
+    /* ---- B. democratic fragility ---- */
+    // B1 the parliament burns; an ambitious government blames its enemies (and _emergencyStep reads it as an attack)
+    if (elect && amb > 0.3 && lead.platform[L.liberty] < 0.8 && r() < 0.0015 * FRAGILE * (1 + 4 * this.fear)) {
+      this.terror = m;
+      const foe = (this.members.redguards || []).length >= (this.members.blackbloc || []).length ? 'redguards' : 'blackbloc';
+      let n = 0; for (const c of this.members[foe] || []) if (!c.jailed && r() < 0.5) { c.jailed = 12; n++; }
+      for (const c of cits) if (r() < 0.3) c.w[L.police] += 0.03;
+      if (this.erosionBy === lead.id) erode(0.08);
+      log(`The parliament building in Oldbridge burns down in the night. ${lead.leader.name} blames the ${COMMUNITIES[CIDX[foe]].name.toLowerCase()}${n ? `, and ${n} of them are rounded up by morning` : ''}. Some ask who really gains.`, 'politics');
+    }
+    // B2 a colonels' revolt: it fails, but a soft response emboldens the generals
+    if (elect && this.army.mood > 0.15 && this.army.plot > 0.1 && r() < 0.006 * FRAGILE * (1 + 2 * Math.max(0, this.army.weak)) && gap('colonels', 60)) {
+      const a = this.army, firm = this.meanS > 0.62 && P[L.liberty] > 0.6 && r() < 0.7;
+      if (firm) { a.plot = Math.max(0, a.plot - 0.3); a.purged = m; trustGov(0.05); } else { a.plot = Math.min(1.2, a.plot + 0.25); memAll(-0.02); }
+      log(`Colonels' revolt: a few hundred soldiers seize the radio station in Oldbridge and read out a manifesto against "the politicians". ${firm ? 'By evening they surrender to loyal troops, and crowds cheer the government.' : 'They give up after two days but get off lightly, and some generals praise their "patriotism".'}`, 'unrest');
+    }
+    // B3 Ostria floods Veyland's papers and screens with lies
+    if (d.electoral && P[L.liberty] > 0.5 && r() < 0.001 * FRAGILE * (1 + 3 * this.tension + (this.ostria.hardline ? 2 : 0)) && gap('trolls', 48)) {
+      let n = 0;
+      for (const c of cits) if (r() < 0.35) { n++; if (!Number.isNaN(c.memory[this.regime])) c.memory[this.regime] -= 0.03; for (const p of gov()) c.trust[p.id] = clamp((c.trust[p.id] || 0) - 0.05, -1, 1); }
+      this.tension = Math.min(1, this.tension + 0.1);
+      log(`Disinformation: ${NEIGHBOUR}n troll farms flood Veyland with fake stories about rigged votes and stolen pensions. ${Math.round(100 * n / cits.length)}% of people say they believed at least one.`, 'politics');
+    }
+    // B4 while the rules erode: judges threatened, or a journalist murdered (which can backfire)
+    if (elect && this.erosion > 0.1 && this.erosionBy === lead.id && r() < 0.02 && gap('judges', 12)) {
+      if (r() < 0.7) {
+        erode(0.06);
+        log(`Judges intimidated: ${2 + Math.floor(r() * 4)} judges who ruled against ${lead.name} get threats, find their tax files audited, and resign. Party loyalists replace them.`, 'politics');
+      } else {
+        const back = this.press.independent > 0.4 && r() < 0.5;
+        if (back) { erode(-0.1); trust(lead, -0.1); } else { erode(0.04); for (const c of cits) c.q[NF] -= 0.03; }
+        log(`The journalist ${noun()}, who was digging into ${lead.name}'s money, is shot dead outside home. ${back ? 'Huge crowds march in silence, and the courts take heart.' : 'Other reporters take the hint.'}`, 'repress');
+      }
+    }
+    // B5 the main opposition leader is arrested on dubious charges
+    if (elect && this.erosion > 0.3 && opp.length && r() < 0.015 && gap('oppjail', 48)) {
+      const p = opp[0];
+      this._replaceLeader(p, `of ${p.name} is arrested for "plotting against the state" and jailed for six years`);
+      p.leader.charisma = Math.min(p.leader.charisma, 0); trust(p, 0.06, c => c.lastVote === p.id); erode(0.05); memAll(-0.02);
+    }
+    // B6 vote buying in the poorest streets two months before the election
+    if (elect && this.nextElection - m === 2 && this.C > 0.05 && r() < 0.15 + 2 * this.C) {
+      const p = this.parties.slice().sort((a, b) => b.money - a.money)[0];
+      if (p.money > 0) {
+        for (const c of cits) if (c.needs[0] < 0.45 && r() < 0.5) c.trust[p.id] = clamp((c.trust[p.id] || 0) + 0.2, -1, 1);
+        this.C = Math.min(1, this.C + 0.02);
+        const caught = r() < 0.5 * P[L.liberty] * this.press.independent;
+        if (caught) trust(p, -0.1, c => c.needs[0] >= 0.45);
+        log(`Vote buying: ${p.name} hands out cash and food parcels in the poorest streets${caught ? '. Reporters film it, and better-off voters are disgusted' : '. Nobody official seems to notice'}.`, caught ? 'scandal' : 'election');
+      }
+    }
+    // B7 the head of the army attacks the government in public: a test of who rules
+    if (elect && this.army.plot > 0.3 && r() < 0.01 * FRAGILE && gap('general', 60)) {
+      const sack = r() < 0.4 + 0.4 * P[L.liberty] - 0.3 * this.crisis;
+      if (sack) { this.army.plot *= 0.4; this.army.purged = m; trust(lead, 0.04); } else { this.army.plot = Math.min(1.2, this.army.plot + 0.25); this.gridlock += 0.5; }
+      log(`General ${noun().split(' ')[1]}, head of the army, tells a veterans' rally that ${lead.name} is "leading Veyland to ruin". ${sack ? `${lead.leader.name} sacks the general the same day.` : 'The government, afraid of the barracks, says nothing.'}`, 'politics');
+    }
+    // B8 power goes to a long-serving leader's head (raises ambition: emergencies, cults and dominance follow more easily)
+    if (elect && lead.seats >= 45 && m - (lead.govSince ?? m) >= 48 && amb < 0.6 && r() < 0.004 * FRAGILE && gap('head', 60)) {
+      lead.leader.ambition = Math.min(1, amb + 0.3);
+      if (lead.core) { lead.core[L.liberty] = Math.max(0.02, lead.core[L.liberty] - 0.08); lead.core[L.police] = Math.min(0.98, lead.core[L.police] + 0.08); }
+      log(`${lead.leader.name} of ${lead.name}, long in power, starts calling critics "enemies of the people" and judges "unelected meddlers". Old allies are worried.`, 'politics');
+    }
+
+    /* ---- C. the economy ---- */
+    // C1 inflation: a boom, a war or debt push prices up faster than pay
+    if (r() < 0.002 * (1 + 8 * Math.max(0, this.growth - 0.03) + (this.war ? 2 : 0) + 3 * Math.max(0, this.debtRatio - 0.5)) && gap('infl', 60)) {
+      this.payFactor = Math.min(this.payFactor, 0.93); hurtAll(0.05); trustGov(-0.04);
+      for (const c of cits) if (c.cls === 'retired' || c.cls === 'small') c.wealthF *= 0.93;
+      log(`Inflation: prices rise ${10 + Math.floor(r() * 12)}% in a year. Wages lag behind, savings and pensions buy less, and shoppers blame ${f ? f.name : gov().length ? gov()[0].name : 'the government'}.`, 'economy');
+    }
+    // C2 hyperinflation: a state that cannot pay its bills prints money until it is worthless
+    const lw = this.wars[this.wars.length - 1];
+    const broke = this.payFactor < 0.8 || (this.war && this.war.score < -0.3) || (lw && lw.how === 'defeat' && m - lw.to < 36) || (this.sanctions > 0 && this.shares.state > 0.6);
+    if (broke && r() < 0.006 && gap('hyper', 240)) {
+      this.debt *= 0.2; this.payFactor = Math.min(this.payFactor, 0.6); hurtAll(0.3); this.g -= 0.05; this.crisis = Math.max(this.crisis, 0.6); memAll(-0.04);
+      for (const c of cits) if (c.cls !== 'owner') c.wealthF *= 0.6;
+      log('Hyperinflation! The crown loses half its value every month. People wheel barrows of banknotes to buy bread; a lifetime of savings buys a pair of shoes.', 'crisis');
+    }
+    // C3 a bank run (deposit guarantees, where regulation is strong, stop the panic)
+    if (this.shares.state < 0.6 && r() < 0.0015 * (1.4 - reg) * (this.lastCrash != null && m - this.lastCrash < 24 ? 4 : 1) * (this.g < 0.95 ? 2 : 1)) {
+      const insured = reg > 0.45 || P[L.state] > 0.5;
+      this.g -= 0.03; hurtAll(insured ? 0.03 : 0.1);
+      if (insured) this.debt += 0.03 * year;
+      else for (const c of cits) if ((c.cls === 'small' || c.cls === 'retired') && r() < 0.4) c.wealthF *= 0.7;
+      log(`Bank run: queues stretch round the block as savers rush to empty their accounts at ${pick(['the Crown Bank', 'Veyland Mutual', 'Oldbridge Savings', 'the Merchant Bank'])}. ${insured ? 'The state guarantees every deposit, and the panic fades.' : 'The bank collapses, and thousands lose their savings.'}`, 'economy');
+    }
+    // C4 a housing bubble in the capital... and, years later, its burst
+    if (this.bubble == null && this.growth > 0.03 && reg < 0.5 && r() < 0.004) {
+      this.bubble = m; bump(RG.Oldbridge, 0.3);
+      for (const c of cits) if (c.age < 32 && c.region === RG.Oldbridge && c.cls === 'worker') c.w[L.regulation] += 0.02;
+      log('Housing bubble: house prices in Oldbridge double in three years. Owners feel rich; young people cannot afford a room.', 'economy');
+    } else if (this.bubble != null && m - this.bubble > 24 && r() < 0.03 * (1.2 - reg)) {
+      this.bubble = null; this.g -= 0.08; this.lastCrash = m; this.boom[RG.Oldbridge] = 0;
+      this.hurt[RG.Oldbridge] = clamp(this.hurt[RG.Oldbridge] + 0.3, 0, 1);
+      log('The housing bubble bursts: prices in Oldbridge crash, builders go bust, and the banks are stuck with loans nobody can repay.', 'economy');
+    }
+    // C5 pension crisis: more pensioners, fewer workers; something has to give
+    if (m % 12 === 3 && P[L.welfare] > 0.35 && r() < 0.05) {
+      let ret = 0; for (const c of cits) if (c.cls === 'retired') ret++;
+      if (ret / cits.length > 0.25 && gap('pension', 120)) {
+        const cut = this.debtRatio > 0.4 || P[L.tax] > 0.6 || r() < 0.5;
+        if (cut) { this.target[L.welfare] = clamp(this.target[L.welfare] - 0.08, 0, 1); trustGov(-0.1, c => c.cls === 'retired' || c.age > 55); }
+        else { this.target[L.tax] = clamp(this.target[L.tax] + 0.05, 0, 1); trustGov(-0.05, c => c.cls === 'worker' || c.cls === 'owner'); }
+        log(`Pension crisis: ${Math.round(100 * ret / cits.length)}% of Veylanders are retired. ${cut ? 'The pension age goes up and pensions are trimmed; the old are furious.' : 'Taxes go up to keep pensions as they are; workers grumble.'}`, 'economy');
+      }
+    }
+    // C6 brain drain: firms abroad recruit the brightest young (they leave through the usual emigration, unless the borders are closed)
+    if (this.abroad > this.meanS - 0.1 && r() < 0.002 && gap('drain', 96)) {
+      let n = 0; for (const c of cits) if (c.skill > 1.25 && c.age < 40 && r() < 0.6) { c.abroad = Math.max(c.abroad, this.abroad + 0.35); n++; }
+      this.A *= 0.995;
+      log(`Brain drain: recruiters from abroad offer double pay, and ${n} of Veyland's brightest young doctors and engineers start packing.`, 'migration');
+    }
+    // C7 the dockers of Saltmere down tools
+    if (this.inVeyland(RG.Saltmere) && P[L.unions] > 0.15 && r() < 0.002 * (0.5 + P[L.trade]) * (1 + 3 * Math.max(0, this.u - 0.08))) {
+      this.g -= 0.02; this.boom[RG.Saltmere] = 0; this.hurt[RG.Saltmere] = clamp(this.hurt[RG.Saltmere] + 0.1, 0, 1);
+      const win = P[L.unions] > 0.5 || r() < 0.4;
+      if (win) this.target[L.wage] = clamp(this.target[L.wage] + 0.02, 0, 1);
+      for (const c of cits) if (c.region === RG.Saltmere && c.cls === 'worker') c.w[L.unions] += win ? 0.03 : -0.01;
+      log(`Dock strike in Saltmere: the cranes stand still and ships queue offshore for ${3 + Math.floor(r() * 6)} weeks. ${win ? 'The dockers win a pay rise.' : 'The dockers go back with nothing.'}`, 'unrest');
+    }
+    // C8 a new industry takes root (good schools and open trade help)
+    if (r() < 0.002 * (0.4 + P[L.services] + 0.5 * P[L.trade])) {
+      const opts = [[RG.Ironvale, 'an electric motor works'], [RG.Highcombe, 'an aircraft factory'], [RG.Fenwick, 'timber and paper mills'], [RG.Redfield, 'canning plants'], [RG.Saltmere, 'a shipyard'], [RG.Oldbridge, 'a film and radio industry']].filter(o => this.inVeyland(o[0]));
+      const [k, what] = pick(opts);
+      bump(k, 0.35); this.A *= 1.01;
+      log(`A new industry: ${what} open${/^an? /.test(what) ? 's' : ''} in ${REGIONS[k].name}. Wages there rise as firms compete for workers.`, 'economy');
+    }
+
+    /* ---- D. society and culture ---- */
+    // D1 gang war over the docks and the night-time streets
+    { const k = pick([RG.Saltmere, RG.Oldbridge, RG.Ironvale]);
+      if (this.inVeyland(k) && r() < 0.003 * (0.3 + 4 * this.crime[k]) && gap('gang', 24)) {
+        this.hurt[k] = clamp(this.hurt[k] + 0.15, 0, 1);
+        for (const c of cits) if (c.region === k) c.w[L.police] += 0.03;
+        trustGov(-0.03, c => c.region === k);
+        log(`Gang war in ${REGIONS[k].name}: shootings every week over the smuggling rackets. People demand more police on the streets.`, 'unrest');
+      } }
+    // D2 a video of police beating a young man to death
+    if (P[L.police] > 0.5 && P[L.liberty] > 0.45 && r() < 0.003 * P[L.police]) {
+      const k = pick(live());
+      for (const c of cits) if (c.age < 35 || c.immigrant) { c.w[L.police] -= 0.03; for (const p of gov()) c.trust[p.id] = clamp((c.trust[p.id] || 0) - 0.05, -1, 1); }
+      this.hurt[k] = clamp(this.hurt[k] + 0.1, 0, 1);
+      log(`A video of police in ${REGIONS[k].name} beating a young man to death is seen by everyone. Riots break out for three nights; the officers are ${P[L.liberty] > 0.7 ? 'charged with murder' : 'quietly moved to desk jobs'}.`, 'unrest');
+    }
+    // D3 a moral panic about what the young are up to
+    if (P[L.liberty] > 0.4 && r() < 0.002) {
+      const what = pick(['a new dance craze is', 'violent comic books are', 'a shocking novel is', 'all-night dance halls are', 'gambling machines are']);
+      for (const c of cits) if (c.religious > 0.4 || c.age > 55) { c.w[L.faith] += 0.025; c.w[L.liberty] -= 0.02; c.w[L.police] += 0.01; }
+      log(`Moral panic: preachers and newspapers warn that ${what} corrupting Veyland's youth. Calls grow for censors and curfews.`, 'culture');
+    }
+    // D4 a youth movement sweeps the universities
+    if (r() < 0.0012 * (1 + 5 * Math.max(0, this.u - 0.08))) {
+      const young = cits.filter(c => c.age < 27); let free = 0, rad = 0;
+      for (const c of young) { free += c.w[L.liberty]; rad += c.w[L.state] + c.w[L.regulation]; }
+      const green = rad > free;
+      for (const c of young) if (r() < 0.4) {
+        if (green) { c.w[L.regulation] += 0.03; c.w[L.state] += 0.02; } else c.w[L.liberty] += 0.04;
+        if (!Number.isNaN(c.memory[this.regime])) c.memory[this.regime] -= 0.03; c.q[NF] += 0.05;   // (more willing to protest)
+      }
+      log(green ? 'A youth movement sweeps the universities: students occupy lecture halls, demanding clean rivers and an end to "the rule of money".'
+        : 'A youth movement sweeps the universities: long hair, loud music and sit-ins against censors, curfews and the old men who run Veyland.', 'culture');
+    }
+    // D5 the trial of the century
+    if (P[L.liberty] > 0.3 && r() < 0.0015) {
+      const off = this.C > 0.08 || r() < 0.3;
+      if (off) { for (const c of cits) if (c.cls === 'worker') { c.w[L.tax] += 0.02; c.w[L.unions] += 0.02; } } else this.C *= 0.95;
+      log(`Trial of the century: the heir to a great Ironvale fortune, accused of killing a worker with his motorcar, is ${off ? 'acquitted. Workers say there is one law for the rich and another for the rest.' : 'sent to prison. "Nobody is above the law," says the judge.'}`, 'news');
+    }
+    // D6 a beloved elder of the nation dies
+    if (m > 240 && r() < 0.001) {
+      const who = this._newLeader(80).name;
+      memAll(d.electoral ? 0.03 : -0.02);
+      log(d.electoral ? `${who}, the last of those who wrote the ${IDEOLOGIES[this.regime].name.toLowerCase()}'s charter, dies at 94. Huge crowds file past the coffin.`
+        : `${who}, a beloved old dissident, dies under house arrest. The funeral turns into a silent march against the ${f ? f.name.replace(/^The /, '') : 'regime'}.`, 'news');
+    }
+    // D7 a heat wave in high summer
+    if (m % 12 >= 5 && m % 12 <= 7 && r() < 0.004) {
+      const k = pick([RG.Oldbridge, RG.Ironvale, RG.Redfield].filter(x => this.inVeyland(x)));
+      if (k != null) { this.harvest = Math.min(this.harvest || 1, 0.85); this._disaster(k, c => c.age > 72, Math.max(1, Math.round((2 + r() * 5) * (1.3 - P[L.services]))), 0.2, 0.002, `A heat wave bakes {region} for three weeks; the old suffer most in stuffy flats. {deaths}${P[L.services] < 0.35 ? ' Hospitals had no beds left.' : ''}`); }
+    }
+    // D8 locusts
+    if (this.inVeyland(RG.Redfield) && m % 12 >= 4 && m % 12 <= 8 && r() < 0.0012) {
+      this.harvest = Math.min(this.harvest || 1, 0.5); this.hurt[RG.Redfield] = clamp(this.hurt[RG.Redfield] + 0.3, 0, 1);
+      for (const c of cits) if (c.region === RG.Redfield && c.religious > 0.5) c.religious = Math.min(1, c.religious + 0.05);
+      log('A plague of locusts darkens the sky over Redfield. In a week the fields are bare; farmers pray, and beg the capital for help.', 'disaster');
+    }
+    // D9 a dam bursts (likelier where safety rules and repairs were skimped)
+    if (r() < 0.0005 * (1.4 - reg) * (1.3 - P[L.services])) {
+      const k = pick([RG.Highcombe, RG.Fenwick].filter(x => this.inVeyland(x)));
+      if (k != null) { if (reg < 0.3) this.C = Math.min(1, this.C + 0.01); this._disaster(k, anyone, 5 + Math.floor(r() * 12), 0.7, 0.015, `A dam bursts above a valley town in {region} and a wall of water sweeps homes away. {deaths}${reg < 0.3 ? ' Its owners had skimped on repairs.' : ''}`); }
+    }
+
+    /* ---- E. life under a dictatorship ---- */
+    if (f && f.leader) {
+      const fname = f.name.replace(/^The /, ''), weak = Math.max(0, 0.5 - f.approval);
+      // E1 show trials: old comrades confess to absurd crimes; everyone learns to keep quiet
+      if (P[L.liberty] < 0.3 && r() < 0.004 * (1 + 2 * weak) && gap('show', 36)) {
+        let n = 0;
+        for (const c of cits) if (!c.jailed && c.fav !== this.regime && c.favScore > 0.3 && r() < 0.15) { c.jailed = 24 + Math.floor(r() * 36); n++; }
+        for (const c of cits) { c.q[NF] -= 0.04; c.q[3 * NF] -= 0.04; }   // protest and rising up feel riskier
+        memAll(-0.01);
+        log(d.rule === 'crown' ? `Treason trials: nobles who fell out with ${f.leader.name} are condemned for plotting with ${NEIGHBOUR}. ${n} of their friends and servants are sent to the prison forts.`
+          : `Show trials: former leaders of the ${fname} confess on the radio to spying for ${NEIGHBOUR}. ${n} more "enemies of the people" are sent to labour camps.`, 'repress');
+      }
+      // E2 the cult of the leader (in a personal dictatorship charisma holds the regime together)
+      if (m - f.leader.since > 36 && f.leader.charisma > 0.2 && r() < 0.003 && gap('cult', 120)) {
+        f.leader.charisma = Math.min(1, f.leader.charisma + 0.15); memAll(0.02);
+        log(`Cult of the leader: ${f.leader.name}'s portrait hangs in every classroom, children learn songs about the leader's boyhood, and the great square of Oldbridge is renamed in the leader's honour.`, 'politics');
+      }
+      // E3 a senior official defects to Ostria
+      if (r() < 0.001 * (1 + 3 * weak)) {
+        this.tension = Math.min(1, this.tension + 0.15); f.approval = Math.max(0, f.approval - 0.05);
+        for (const c of cits) if (c.cls === 'official' && !Number.isNaN(c.memory[this.regime])) c.memory[this.regime] -= 0.03;
+        log(`A defector: ${noun()}, deputy head of the secret police, flees to ${NEIGHBOUR} with a suitcase of files. Foreign radio reads out the ${fname}'s secrets night after night.`, 'politics');
+      }
+      // E4 the secret police turn on their own
+      if (r() < 0.0025 * (this.succession > 0 ? 4 : 1)) {
+        let n = 0;
+        for (const c of cits) if (c.cls === 'official' && !c.jailed) { if (r() < 0.08) { c.jailed = 12 + Math.floor(r() * 24); n++; } else if (!Number.isNaN(c.memory[this.regime])) c.memory[this.regime] -= 0.02; }
+        log(`Purge: the secret police arrest ${n} officers and officials for "plotting with foreign spies". The rest learn to agree loudly.`, 'repress');
+      }
+      // E5 the five-year plan reports success or admits failure
+      if ((d.rule === 'party' || d.rule === 'experts') && (P[L.state] > 0.45 || d.growth) && (m - this.regimeSince) % 60 === 59 && r() < 0.6) {
+        const ok = r() < clamp(0.3 + 0.6 * P[L.services] + 0.3 * P[L.trade] - 2 * this.C, 0.1, 0.9);
+        if (ok) { this.A *= 1.04; bump(pick(live()), 0.3); memAll(0.02); }
+        else { this.A *= 0.97; this.harvest = Math.min(this.harvest || 1, 0.6); this.hurt[RG.Redfield] = clamp(this.hurt[RG.Redfield] + 0.25, 0, 1); memAll(-0.03); }
+        log(ok ? 'The five-year plan is fulfilled ahead of time: new steelworks, dams and tractor plants. Posters show smiling workers.'
+          : 'The five-year plan fails: factories made the wrong goods, the farm collectives went hungry, and the planners blame "saboteurs".', 'economy');
+      }
+      // E6 palace intrigue: a deputy, a general or a royal cousin moves against the ruler
+      if (m - this.regimeSince > 24 && m - f.leader.since > 24 && r() < 0.0012 * (1 + 3 * Math.max(0, 0.45 - f.approval) + (f.leader.age > 70 ? 1 : 0))) {
+        if (r() < 0.35) {
+          const old = f.leader;
+          if (old.royal) { f.leader = this._newMonarch(d.elective ? undefined : old.house); log(`Palace coup: ${old.name} is forced to abdicate by a royal cousin, who is crowned ${f.leader.name}.`, 'leader'); }
+          else this._replaceLeader(f, 'is ousted in a palace coup by the deputy leader');
+          this.succession = 6; f.pool = f.pool.map(b => this._mutate(b, 0.3));
+        } else {
+          let n = 0; for (const c of cits) if (c.cls === 'official' && !c.jailed && r() < 0.03) { c.jailed = 24; n++; }
+          log(`Palace intrigue: a plot against ${f.leader.name} is discovered. ${n} courtiers and officers are arrested.`, 'repress');
+        }
+      }
+    }
+
+    /* ---- F. the provinces ---- */
+    // F1 a language riot (where the local tongue is banned or the province has no say)
+    { const k = Math.floor(r() * NR), cu = REGIONS[k].culture;
+      if (cu.identity >= 0.35 && this.inVeyland(k) && (this.langBan[k] > 0 || this.autonomyOf(k) < 0.3) && r() < 0.006) {
+        for (const c of cits) if (c.culture === k && c.region === k) c.identity = Math.min(1, c.identity + 0.03);
+        this.hurt[k] = clamp(this.hurt[k] + 0.08, 0, 1);
+        log(`Language riot in ${REGIONS[k].name}: a teacher is sacked for teaching in ${cu.dialect.split(',')[0]}, and ${cu.people} fight the police for two days.`, 'unrest');
+      } }
+    // F2 a provincial bank collapses: does the capital rescue it?
+    { const k = pick([RG.Redfield, RG.Highcombe, RG.Fenwick, RG.Saltmere]);
+      if (this.inVeyland(k) && r() < 0.0012 * (1.4 - reg) && gap('regbank', 36)) {
+        const save = r() < (P[L.autonomy] < 0.6 ? 0.4 : 0.7);
+        if (save) this.debt += 0.02 * year;
+        else {
+          for (const c of cits) if (c.region === k) { if (c.cls === 'small' || c.cls === 'retired') c.wealthF *= 0.75; if (c.culture === k) c.identity = Math.min(1, c.identity + 0.02); }
+          this.hurt[k] = clamp(this.hurt[k] + 0.2, 0, 1);
+        }
+        log(`The Bank of ${REGIONS[k].name}, where farmers and shopkeepers kept their savings, collapses. ${save ? 'The capital steps in and pays out.' : `The capital refuses to help. "Oldbridge looks after its own," say the ${REGIONS[k].culture.people}.`}`, 'economy');
+      } }
+    // F3 a provincial governor defies the capital: for local rights, or for the constitution itself
+    { const k = Math.floor(r() * NR);
+      if (k !== RG.Oldbridge && this.inVeyland(k) && r() < 0.0008 * (0.5 + 6 * this.indepSupport[k] + (this.autonomyOf(k) < 0.3 ? 1 : 0) + (this.erosion > 0.2 ? 6 : 0))) {
+        const who = this._newLeader(50).name, R = REGIONS[k];
+        if (this.erosion > 0.2 && d.electoral) {
+          erode(-0.06); for (const c of cits) if (c.region === k) c.w[L.autonomy] += 0.02;
+          log(`${who}, governor of ${R.name}, refuses to sack judges and close papers on the capital's orders. Other provinces follow, and the government backs down for now.`, 'politics');
+        } else if (P[L.liberty] < 0.35) {
+          for (const c of cits) if (c.culture === k) c.identity = Math.min(1, c.identity + 0.04); memAll(-0.01);
+          log(`${who}, governor of ${R.name}, refuses an order from Oldbridge and is taken away by the secret police. The ${R.culture.people} will remember.`, 'repress');
+        } else {
+          for (const c of cits) if (c.culture === k && c.region === k) { c.identity = Math.min(1, c.identity + 0.02); c.w[L.autonomy] += 0.02; }
+          log(`${who}, governor of ${R.name}, defies the capital and refuses to collect a new national tax. The standoff is front-page news for weeks.`, 'politics');
+        }
+      } }
   }
   _immigrant(s0) {
     const r = this.rng, w = [3, 2, 1, 3, 1, 1];
