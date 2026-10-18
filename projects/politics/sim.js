@@ -1979,7 +1979,7 @@ class World {
   /** In hard times a fiery outsider may found a movement against "the old parties". */
   _maybeOutsider() {
     const grudge = this.crisis + 0.1 * Math.min(3, this.gridlock), r = this.rng, d = this.ideology;
-    if (this.parties.some(p => p.outsider) || this.parties.length >= 8 || grudge < 0.3 || r() > grudge) return;
+    if (this.parties.some(p => p.outsider) || this.parties.length >= 8 || grudge < 0.3 || this.month - (this.news.outsider ?? -999) < 96 || r() > grudge) return;
     const angry = this.citizens.filter(c => c.sRef - c.s > 0.01 || (c.cls === 'worker' && !c.employed));
     if (angry.length < 30) return;
     const ideal = new Float32Array(NP);
@@ -1995,7 +1995,7 @@ class World {
     else { ideal[L.trade] = Math.min(ideal[L.trade], 0.25); ideal[L.autonomy] = Math.min(ideal[L.autonomy], 0.15); ideal[L.faith] = Math.max(ideal[L.faith], 0.5); }
     const p = this._foundParty(null, null, left ? 'populist' : 'nationalist', Float32Array.from(ideal));
     if (!p) return;
-    p.outsider = true;
+    p.outsider = true; this.news.outsider = this.month;
     p.leader.charisma = 0.6 + 0.4 * r(); p.leader.ambition = 0.5 + 0.5 * r();
     const sur = p.leader.name.split(' ')[1];
     const name = r() < 0.4 ? `${sur}'s Movement` : `${left ? "The People's" : 'National'} ${['Renewal', 'Awakening', 'Revival', 'Resolve'][Math.floor(r() * 4)]}`;
