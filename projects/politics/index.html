@@ -138,6 +138,11 @@
   .promise::before { content: ''; position: absolute; left: 0; right: 0; top: 5px; height: 2px; background: #1d2128; border-radius: 1px; }
   .promise .cur { position: absolute; top: 0; width: 2px; height: 12px; background: var(--muted); margin-left: -1px; }
   .promise .pro { position: absolute; top: 1px; width: 10px; height: 10px; border-radius: 50%; margin-left: -5px; box-shadow: 0 0 0 2px var(--bg); }
+  .promise .goal { position: absolute; top: 0; width: 12px; height: 12px; border-radius: 50%; margin-left: -6px; border: 2px solid; box-sizing: border-box; opacity: .8; }
+  .promise .lane { position: absolute; top: 3px; height: 6px; border-radius: 3px; opacity: .22; }
+  #pmap { width: 100%; height: 210px; display: block; margin-top: 10px; cursor: pointer; }
+  .pcard .why { grid-column: 2 / 4; margin-top: -3px; font-size: 11.5px; color: var(--muted); }
+  .pcard .nm { white-space: normal; }
   .pill { display: inline-block; border: 1px solid var(--line); border-radius: 5px; padding: 0 6px; font-size: 12px; color: var(--muted); margin: 0 4px 4px 0; }
   .hint { color: var(--faint); font-size: 12.5px; }
   #brain { width: 100%; height: 250px; display: block; background: #0f1215; border-radius: 6px; }
@@ -209,18 +214,18 @@
       <p>Veyland is a made-up country of <b>600 citizens</b>. Nothing anyone does is scripted. Everybody <b>starts knowing nothing</b> and learns from their own experience.</p>
       <p><b>Citizens</b> feel six needs (money, health, safety, freedom, fairness, dignity at work). Each year they compare how their life changed with how the laws changed, and slowly learn which laws help or hurt <i>them</i>. A factory worker, a farmer and a factory owner learn different things. They vote for whoever promises the laws they believe in, and trust parties that governed while life got better. They also chat with neighbours and pick up their opinions.</p>
       <p>Each month they choose to <b>stay quiet, protest, strike or rise up</b>, and learn from what happened next: did life improve, did they get arrested? A crowd nearby, anger, and believing in a better system push them to act. Strong police hold them back. If the people (and police) who want a different system outweigh those defending it, there's a <b>revolution or coup</b>, and the country becomes whatever most rebels wanted: communism, syndicalism, mutualism, distributism, fascism, technocracy, a free-market minarchy, a military junta, or liberal democracy.</p>
-      <p><b>Parties</b> have a small brain (a neural network) that turns the state of the country into promises. Before each election, each party tests six versions of its brain in an opinion poll (a primary). The winner leads, and the next six are variations of it, plus ideas copied from rivals. That's evolution: promises that win votes survive. <b>Dictators</b> evolve the same way, but they test plans on their own supporters, especially the police. <b>Experts</b> (technocracy) test plans with the economic model.</p>
+      <p><b>Parties</b> have a small brain (a neural network) that turns the state of the country into promises. Before each election, each party tests six versions of its brain in an opinion poll (a primary). The winner leads; next time the six candidates are the winner itself, four variations of it, and one reset to the party's roots. That's evolution: promises that win votes survive. But every party is founded as a <b>kind of party</b> (Labour, agrarians, Lantern democrats, greens, nationalists, pensioners, a business party, populists… 24 kinds), named to fit, with a few <b>core laws</b> it never strays far from and a <b>home base</b> of people who feel it is "one of us". Its members punish candidates who sell out, voters grow <b>loyal</b> to a party over the years, and they tire of a party that has governed too long. <b>Dictators</b> evolve the same way, but they test plans on their own supporters, especially the police. <b>Experts</b> (technocracy) test plans with the economic model.</p>
       <p><b>Lobbies</b> (business, unions, smallholders) learn whether saving, donating to a party or bribing the government helps their members. Governments learn whether taking bribes pays, but a free press finds some of them out.</p>
       <p><b>Changing the system peacefully</b> is possible but very hard. Parties can campaign for a new system. If parties holding two-thirds of parliament back the same one in two elections running, there is a referendum, and 60% must say yes. Workers' councils and assemblies need two-thirds wanting the same system for two years. A dictatorship hands over power only if most of its own police and most people want the same system and it is very unpopular.</p>
       <p><b>War:</b> next door is <b>Ostria</b>, a made-up neighbour. It may attack when Veyland looks weak or torn apart. Parties and rulers can also choose war. Citizens learn whether war helps or hurts them, the same way they learn about laws. Soldiers die, the economy suffers, and a defeat can bring a government down.</p>
       <p><b>The press</b> can be bought. Lobbies may buy newspapers that spin the news their owners' way and bury their owners' scandals. Where speech is not free, the state runs the media and never exposes the rulers. <b>Regional parties</b> form when a region feels nobody speaks for it; they stand only at home. <b>Emigration:</b> people leave when they believe life abroad is better, judged from letters home by those who left. Dictatorships close the borders. Immigrants arrive when Veyland looks good, knowing nothing.</p>
       <p><b>Real-life politics:</b> up to 8 parties at once, each with a named <b>leader</b> whose charisma wins or loses votes. Leaders resign after bad results, have scandals, grow old and die; when a dictator dies there is a succession struggle. Big parties can <b>split</b> when their own voters feel abandoned, small similar ones <b>merge</b>, and <b>coalitions can collapse</b> between elections.</p>
-      <p><b>Events</b> happen the way they do in real life, more or less likely depending on the laws: mine disasters and factory fires (likelier with weak safety rules), floods, earthquakes and epidemics (good public services soften them), market crashes (likelier after booms with light regulation), inventions (likelier with good schools and free speech), price shocks, border incidents, trade deals, sanctions on dictatorships, refugee waves, assassination attempts and sporting triumphs. Regions hit by a disaster are circled on the map.</p>
-      <p><b>Systems:</b> besides liberal democracy there are communism, syndicalism, mutualism, distributism, fascism, technocracy, free-market minarchy, military junta, <b>national syndicalism, absolute monarchy, constitutional monarchy, monarcho-distributism, anarcho-communism and theocracy</b> (rule by the Lantern Church, Veyland's made-up old faith). Parties drift between about 30 sects, from eco-socialists and market socialists to religious democrats, agrarians and populists of left and right.</p>
-      <p><b>Parties come and go:</b> young voters drift away from their grandparents' parties, and old declining parties may rebrand. <b>Democracies can backslide:</b> a strongman or anti-democratic party with a majority slowly packs the courts and leans on the press; mass protests slow it and losing power reverses it, but if it goes all the way, elections are suspended.</p>
+      <p><b>Events</b> happen the way they do in real life, more or less likely depending on the laws: mine disasters and factory fires (likelier with weak safety rules), floods, earthquakes and epidemics (good public services soften them), market crashes (likelier after booms with light regulation), inventions (likelier with good schools and free speech), price shocks, border incidents, trade deals, sanctions on dictatorships, refugee waves, assassination attempts and sporting triumphs. Regions hit by a disaster are circled on the map. Plus everyday politics (leaders toppled by their own MPs, TV debates, MPs crossing the floor, corruption trials, budget deadlocks, a game-show host's party), danger signs for democracy (a suspicious parliament fire, a colonels' revolt, foreign disinformation, judges threatened, the opposition leader jailed, vote buying), money troubles (inflation, bank runs, housing bubbles, pension crises, brain drain), society (gang wars, police brutality on video, moral panics, youth movements, heat waves, locusts, dam bursts), life under a dictatorship (show trials, the leader's cult, defectors, purges, five-year plans, palace coups) and the provinces (language riots, bank collapses, defiant governors).</p>
+      <p><b>Systems:</b> besides liberal democracy there are communism, syndicalism, mutualism, distributism, fascism, technocracy, free-market minarchy, military junta, <b>national syndicalism, absolute monarchy, constitutional monarchy, monarcho-distributism, anarcho-communism and theocracy</b> (rule by the Lantern Church, Veyland's made-up old faith). Parties drift between 62 sects, from eco-socialists and market socialists to religious democrats, agrarians and populists of left and right.</p>
+      <p><b>Parties come and go:</b> young voters drift away from their grandparents' parties, and old declining parties may rebrand. <b>Democracies are fragile:</b> hard times (joblessness, a world slump) turn voters toward outsiders and anti-system parties; parties that refuse to govern together cause hung parliaments and snap elections; a strongman, an outsider, a leader with a personality cult, or a government ruling by emergency decree slowly packs the courts and leans on the press. At 70% many governments rewrite the constitution (a <b>soft coup</b>: elections stay but are rigged); at the end it abolishes them. Unhappy officers may stage an <b>army coup</b> when the government looks weak. Protests, courts, a free press and a monarch who believes in parliament fight back, and fallen democracies can come back: a democratic breakthrough at the polls, people power in the streets, generals going back to their barracks, a revolution.</p>
       <p><b>Communities:</b> the Lantern Church, workers' clubs, farmers' co-ops, student societies, business clubs, veterans and newcomers, plus street movements (Anti-fascist Action, patriotic and workers' militias, green activists). People join for belonging and ideals and leave when it costs too much. Members talk mostly with each other; movements bring people onto the streets, militias are armed, and rival movements clash. Click a region on the map (or in the table) for its page; scroll on the map to zoom in until citizens become little figures.</p>
       <p><b>Provinces have their own cultures:</b> a dialect (Highcombe even has its own language, Old Combish), a festival, a folk hero, how religious people are and what they value most. People are born into their province's culture and carry it when they move for work, so cultures slowly mix. A strong <b>regional identity</b> wants its province to run its own affairs (the <b>Regional autonomy</b> law); ruled from far away, or with its language banned, it starts to want <b>independence</b>. Elected governments may grant autonomy; regional parties may win an independence referendum; separatists may rebel. A province that leaves is shown as independent on the map and its people leave the story.</p>
-      <p><b>More systems:</b> plutocracy (votes counted by wealth), sortition (51 citizens picked by lottery make the laws), the developmental state (one party chasing growth), eco-communalism, the federal republic and the social republic. <b>More movements:</b> independence movements, a peace movement, Lantern revivalists, a secular league, monarchist leagues, an anarchist black bloc and a tax revolt, plus sports clubs and heritage societies.</p>
+      <p><b>Newest systems:</b> guided democracy and the popular republic (rigged elections: the halfway house of a falling democracy), the Lantern republic, the council republic, the planned commonwealth, the corporate state, the elective monarchy and personal dictatorship. <b>More systems:</b> plutocracy (votes counted by wealth), sortition (51 citizens picked by lottery make the laws), the developmental state (one party chasing growth), eco-communalism, the federal republic and the social republic. <b>More movements:</b> independence movements, a peace movement, Lantern revivalists, a secular league, monarchist leagues, an anarchist black bloc and a tax revolt, plus sports clubs and heritage societies.</p>
       <p>Click any dot, party, lobby or the ruler to <b>look inside their head</b>. <b>Save</b> downloads the whole country as a file; <b>Load</b> opens it again.</p>
     </div>
 
@@ -242,6 +247,7 @@
         <div id="regimeBox"></div>
         <canvas id="parl"></canvas>
         <div class="plist" id="plist"></div>
+        <canvas id="pmap" title="Where the parties stand: dots are what they promise now, rings what they stand for. Grey cross: the laws in force now. Faint dots: the laws citizens believe would help them."></canvas>
         <div id="constBox"></div>
       </div>
     </div>
@@ -318,7 +324,30 @@
 <script src="sim.js"></script>
 <script>
 'use strict';
-const { World, POLICIES, NEEDS, IDEOLOGIES, REGIONS, ACTIONS, FEATURES, BRAIN_SIZES, INPUT_NAMES, OUTPUT_NAMES, LOBBY_ACTIONS, NEIGHBOUR, W_WAR, OUT_CHANGE, OUT_WAR, COMMUNITIES, L } = Politics;
+const { World, POLICIES, NEEDS, IDEOLOGIES, REGIONS, ACTIONS, FEATURES, BRAIN_SIZES, INPUT_NAMES, OUTPUT_NAMES, LOBBY_ACTIONS, NEIGHBOUR, W_WAR, OUT_CHANGE, OUT_WAR, COMMUNITIES, ARCHETYPES, axes, L } = Politics;
+const KIND = Object.fromEntries(ARCHETYPES.map(a => [a.id, a]));
+const CLASS_WORDS = { worker: 'workers', owner: 'owners of big firms', small: 'farmers and shopkeepers', official: 'police and officials', retired: 'pensioners' };
+/** Who a kind of party speaks for, in words (its strongest ties first). */
+function baseWords(a) {
+  const b = a.base, out = [];
+  for (const k in b.cls || {}) out.push([b.cls[k], CLASS_WORDS[k]]);
+  for (const k in b.comm || {}) { const n = COMMUNITIES.find(m => m.id === k).name; out.push([b.comm[k], 'members of ' + (/^(Lantern|Anti-fascist)/.test(n) ? n : n.replace(/^The /, 'the ').replace(/^\w/, ch => ch.toLowerCase()))]); }
+  for (const k in b.reg || {}) out.push([b.reg[k], 'people in ' + k]);
+  if (b.rel) out.push([Math.abs(b.rel), b.rel > 0 ? 'the devout' : 'the unbelieving']);
+  if (b.young) out.push([b.young, 'the young']);
+  if (b.old) out.push([b.old, 'the old']);
+  if (b.immigrant) out.push([b.immigrant, 'immigrants']);
+  if (b.jobless) out.push([b.jobless, 'the jobless']);
+  if (b.unhappy) out.push([b.unhappy, 'people hit by hard times']);
+  if (b.firm) out.push([b.firm.coop || 0, 'co-op workers']);
+  if (a.regional) out.push([3, 'its province\u2019s own people']);
+  return out.sort((x, y) => y[0] - x[0]).map(x => x[1]);
+}
+/** What a party stands for, in words: its core laws, high or low. */
+function coreWords(p) {
+  const a = KIND[p.arch]; if (!a) return '';
+  return a.lane.map(i => `${p.core[i] >= 0.58 ? '\u2191' : p.core[i] <= 0.42 ? '\u2193' : '~'} ${POLICIES[i].name.toLowerCase()}`).join(' · ');
+}
 const $ = id => document.getElementById(id);
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const clamp = (x, a, b) => x < a ? a : x > b ? b : x;
@@ -616,7 +645,7 @@ function drawParliament() {
   const d = world.ideology;
   if (!d.electoral) {
     ctx.fillStyle = '#5a5f68'; ctx.font = `${12 * dpr}px system-ui`; ctx.textAlign = 'center';
-    const msg = { party: 'No parliament: one party rules.', experts: 'No parliament: experts decide.', councils: 'Workers’ councils vote on every law.', assembly: 'Every citizen votes on every law.', crown: 'No parliament: the crown rules.', clergy: 'No parliament: the Church’s elders rule.', lottery: 'No parliament: 51 citizens picked by lottery make the laws.' }[d.rule];
+    const msg = d.id === 'corporate' ? 'No parliament: a board of directors rules.' : d.personal ? 'No parliament: one person rules.' : { party: 'No parliament: one party rules.', experts: 'No parliament: experts decide.', councils: 'Workers’ councils vote on every law.', assembly: 'Every citizen votes on every law.', crown: 'No parliament: the crown rules.', clergy: 'No parliament: the Church’s elders rule.', lottery: 'No parliament: 51 citizens picked by lottery make the laws.' }[d.rule];
     ctx.fillText(msg, W / 2, H / 2);
     return;
   }
@@ -647,7 +676,7 @@ function drawParliament() {
 
 function renderRules() {
   const d = world.ideology, years = Math.floor((world.month - world.regimeSince) / 12);
-  const how = { elections: 'Free elections every 4 years', party: 'One-party rule', experts: 'Rule by experts', councils: 'Workers’ councils', assembly: 'Direct democracy', crown: 'Rule by the crown', clergy: 'Rule by the Church', wealth: 'Elections, votes counted by wealth', lottery: 'A citizens’ assembly chosen by lottery' }[d.rule]
+  const how = d.id === 'corporate' ? 'Rule by a board of company directors' : d.personal ? 'Rule by one person' : d.elective ? 'Rule by an elected monarch' : { elections: d.guided ? 'Managed elections every 4 years' : 'Free elections every 4 years', party: 'One-party rule', experts: 'Rule by experts', councils: 'Workers’ councils', assembly: 'Direct democracy', crown: 'Rule by the crown', clergy: 'Rule by the Church', wealth: 'Elections, votes counted by wealth', lottery: 'A citizens’ assembly chosen by lottery' }[d.rule]
     + (world.monarch ? ` · reigning: ${esc(world.monarch.name)}` : '');
   const ruler = world.faction ? ` · <a href="#" data-sel="regime" style="color:var(--hue)">${esc(world.faction.name)}</a>${world.faction.leader ? `, led by ${esc(world.faction.leader.name)}` : ''}${world.succession > 0 ? ' · <b style="color:#fab219">succession struggle</b>' : ''}` : '';
   $('regimeBox').innerHTML = `<h3 style="display:flex;gap:8px;align-items:center"><i style="width:12px;height:12px;border-radius:3px;background:${d.hue}"></i>${esc(d.name)}</h3>
@@ -659,17 +688,83 @@ function renderRules() {
   const gov = new Set(world.government ? world.government.parties : []);
   $('plist').innerHTML = world.parties.slice().sort((a, b) => (b.seats - a.seats) || (b.poll || 0) - (a.poll || 0)).map(p => `
     <div class="pcard ${selected && selected.id === p.id ? 'sel' : ''}" data-party="${p.id}"><i style="background:${p.color}"></i>
-      <span class="nm">${esc(p.name)}${gov.has(p.id) ? '<span class="gov">GOV</span>' : ''}${partyBadges(p)} <small>· ${esc(p.family)}</small></span>
+      <span class="nm">${esc(p.name)}${gov.has(p.id) ? '<span class="gov">GOV</span>' : ''}${partyBadges(p)} <small>· ${esc(KIND[p.arch] ? KIND[p.arch].label : p.family)}</small></span>
       <span class="num">${p.seats} seats · polls ${pct(p.poll || 0)}</span>
-      ${p.leader ? `<span></span><span class="hint" style="grid-column:2/4;margin-top:-2px">led by ${esc(p.leader.name)}${p.leader.charisma > 0.4 ? ' · charismatic' : p.leader.charisma < -0.4 ? ' · uninspiring' : ''}</span>` : ''}</div>`).join('');
+      ${KIND[p.arch] ? `<span></span><span class="why" title="What it stands for (↑ more, ↓ less, ~ middling) · who it speaks for">${esc(coreWords(p))} · for ${esc(baseWords(KIND[p.arch]).slice(0, 2).join(', '))}</span>` : ''}
+      ${p.leader ? `<span></span><span class="hint" style="grid-column:2/4;margin-top:-2px">led by ${esc(p.leader.name)}${p.leader.charisma > 0.4 ? ' · charismatic' : p.leader.charisma < -0.4 ? ' · uninspiring' : ''}${(p.leader.ambition || 0) > 0.45 ? ' · power-hungry' : ''}</span>` : ''}</div>`).join('');
+  drawPartyMap();
   $('constBox').innerHTML = constitutionHTML();
   drawParliament();
 }
+/** Where the parties stand on two simple axes; faint dots: the laws each citizen believes would help them most. */
+let pmapSpots = [];
+function drawPartyMap() {
+  const cv = $('pmap');
+  if (!world.parties.length) { cv.style.display = 'none'; return; }
+  cv.style.display = '';
+  const dpr = sizeCanvas(cv), ctx = cv.getContext('2d'), W = cv.width, H = cv.height, pad = 18 * dpr;
+  // zoom to where the parties are (with some room), so that they don't all crowd the middle
+  const pts = world.parties.flatMap(p => [axes(p.platform), ...(p.core ? [axes(p.core)] : [])]).concat([axes(world.P)]);
+  const fit = k => { let lo = Math.min(...pts.map(q => q[k])), hi = Math.max(...pts.map(q => q[k])); const mid = (lo + hi) / 2, half = Math.max(0.15, (hi - lo) / 2 + 0.06); return [Math.max(0, mid - half), Math.min(1, mid + half)]; };
+  const [e0, e1] = fit(0), [a0, a1] = fit(1);
+  const X = e => pad + (e1 - e) / (e1 - e0) * (W - 2 * pad), Y = a => pad + (a1 - a) / (a1 - a0) * (H - 2 * pad);   // left: state & unions; top: control
+  const inside = (e, a) => e >= e0 && e <= e1 && a >= a0 && a <= a1;
+  ctx.clearRect(0, 0, W, H);
+  ctx.strokeStyle = '#1d2128'; ctx.lineWidth = dpr;
+  ctx.strokeRect(pad, pad, W - 2 * pad, H - 2 * pad);
+  if (inside(0.5, a0)) { ctx.beginPath(); ctx.moveTo(X(0.5), pad); ctx.lineTo(X(0.5), H - pad); ctx.stroke(); }
+  if (inside(e0, 0.5)) { ctx.beginPath(); ctx.moveTo(pad, Y(0.5)); ctx.lineTo(W - pad, Y(0.5)); ctx.stroke(); }
+  ctx.fillStyle = '#5a5f68'; ctx.font = `${10 * dpr}px system-ui`;
+  ctx.textAlign = 'left'; ctx.fillText('state & unions', pad + 3 * dpr, H - 5 * dpr);
+  ctx.textAlign = 'right'; ctx.fillText('free market', W - pad - 3 * dpr, H - 5 * dpr);
+  ctx.textAlign = 'center'; ctx.fillText('control: police, faith, one nation', W / 2, 12 * dpr); ctx.fillText('freedom', W / 2, H - pad - 4 * dpr);
+  // citizens: the laws they believe would help them (today's law plus a step in the direction they want)
+  const v = new Float32Array(POLICIES.length);
+  ctx.fillStyle = 'rgba(138,143,152,.18)';
+  for (const c of world.citizens) {
+    for (let i = 0; i < v.length; i++) v[i] = Math.min(1, Math.max(0, world.P[i] + c.w[i] * 3));
+    const [e, a] = axes(v); if (inside(e, a)) ctx.fillRect(X(e) - dpr, Y(a) - dpr, 2 * dpr, 2 * dpr);
+  }
+  const [le, la] = axes(world.P);
+  ctx.strokeStyle = '#8a8f98'; ctx.lineWidth = 1.5 * dpr; ctx.beginPath();
+  ctx.moveTo(X(le) - 5 * dpr, Y(la)); ctx.lineTo(X(le) + 5 * dpr, Y(la)); ctx.moveTo(X(le), Y(la) - 5 * dpr); ctx.lineTo(X(le), Y(la) + 5 * dpr); ctx.stroke();
+  pmapSpots = [];
+  const labels = [];
+  for (const p of world.parties) {
+    const [e, a] = axes(p.platform), r = (3 + 9 * Math.sqrt(p.poll || p.share || 0.02)) * dpr;
+    if (p.core) {
+      const [ce, ca] = axes(p.core);
+      ctx.strokeStyle = p.color; ctx.globalAlpha = 0.6; ctx.lineWidth = 1.5 * dpr;
+      ctx.beginPath(); ctx.moveTo(X(ce), Y(ca)); ctx.lineTo(X(e), Y(a)); ctx.stroke();
+      ctx.beginPath(); ctx.arc(X(ce), Y(ca), 5 * dpr, 0, 7); ctx.stroke(); ctx.globalAlpha = 1;
+    }
+    ctx.fillStyle = p.color; ctx.beginPath(); ctx.arc(X(e), Y(a), r, 0, 7); ctx.fill();
+    if (selected && selected.id === p.id) { ctx.strokeStyle = '#e6e8eb'; ctx.lineWidth = 2 * dpr; ctx.stroke(); }
+    labels.push({ text: p.name.length > 22 ? p.name.slice(0, 21) + '…' : p.name, x: X(e) + r + 3 * dpr, y: Y(a) + 3 * dpr });
+    pmapSpots.push({ id: p.id, x: X(e) / dpr, y: Y(a) / dpr, r: r / dpr + 4 });
+  }
+  // names, nudged apart where they would overlap
+  ctx.fillStyle = '#c4c8ce'; ctx.textAlign = 'left'; ctx.font = `${10 * dpr}px system-ui`;
+  labels.sort((p, q) => p.y - q.y);
+  for (let i = 0; i < labels.length; i++) {
+    const l = labels[i]; l.w = ctx.measureText(l.text).width;
+    if (l.x + l.w > W - 2 * dpr) l.x = Math.max(2 * dpr, W - 2 * dpr - l.w);
+    for (let j = 0; j < i; j++) { const o = labels[j]; if (Math.abs(o.y - l.y) < 11 * dpr && l.x < o.x + o.w && o.x < l.x + l.w) l.y = o.y + 11 * dpr; }
+    ctx.fillText(l.text, l.x, Math.min(H - 4 * dpr, l.y));
+  }
+}
+$('pmap').addEventListener('click', e => {
+  const b = $('pmap').getBoundingClientRect(), x = e.clientX - b.left, y = e.clientY - b.top;
+  const hit = pmapSpots.slice().reverse().find(s => (s.x - x) ** 2 + (s.y - y) ** 2 <= s.r ** 2);   // (the last drawn is on top)
+  if (hit) select({ type: 'party', id: hit.id });
+});
 function partyBadges(p) {
   let b = '';
+  if (p.outsider) b += '<span class="badge war" title="A movement born of hard times, against the old parties">outsider</span>';
+  if (p.id === world.dominant) b += '<span class="badge" title="The ruling party of a guided system: state TV, patronage and a padded vote count">ruling party</span>';
   if (p.region != null) b += `<span class="badge" title="Stands only in ${esc(REGIONS[p.region].name)}">${esc(REGIONS[p.region].name)} only</span>`;
   if (world.pushesChange(p.platform)) b += p.region != null ? `<span class="badge war" title="Campaigns for ${esc(REGIONS[p.region].name)} to leave Veyland">→ independence</span>`
-    : `<span class="badge" title="Campaigns to change the whole system">→ ${esc(IDEOLOGIES[world.aimOf(p.platform)].name)}</span>`;
+    : `<span class="badge" title="Campaigns to change the whole system">→ ${esc(IDEOLOGIES[world.aimOf(p.platform, p)].name)}</span>`;
   if (world.wantsWar(p.platform) !== !!world.war) b += `<span class="badge war">${world.war ? 'wants peace' : 'wants war'}</span>`;
   return b;
 }
@@ -685,13 +780,26 @@ function constitutionHTML() {
   let html = '<span class="label">Changing the system peacefully</span><br>';
   if (d.electoral && world.erosion > 0.01) {
     const by = world.parties.find(p => p.id === world.erosionBy);
-    html += `<b style="color:#fab219">Democracy under strain: ${pct(world.erosion)} eroded.</b> ${by ? esc(by.name) + ' is' : 'The government has been'} packing the courts and leaning on the press. At 100% elections are suspended. Mass protests slow it; losing power reverses it.<br>`;
+    const why = { auth: 'campaigns to end the system', strongman: 'is a strongman party', outsider: 'is an outsider movement in power', cult: 'has built a cult around its leader', emergency: 'rules by emergency decree', dominant: 'has been in power too long', captured: 'is in the pocket of big money' }[world.erosionWhy] || 'is eroding the rules';
+    if (!by || !world.government.parties.includes(by.id)) html += `<b style="color:#fab219">Democracy recovering: ${pct(world.erosion)} eroded.</b> The courts and the press are slowly regaining their independence.<br>`;
+    else html += `<b style="color:#fab219">Democracy under strain: ${pct(world.erosion)} eroded.</b> ${by ? esc(by.name) : 'The government'} ${esc(why)}: packing the courts and leaning on the press. ${d.guided || (world.erosionTo >= 0 && !IDEOLOGIES[world.erosionTo].guided) || (world.monarch && (world.monarch.ambition || 0) > 0.45) ? 'At 100% elections end.' : `At ${pct(Politics.SOFT_COUP)} it rewrites the constitution (a "soft coup"); at 100% elections end.`} Mass protests slow it; losing power reverses it.<br>`;
+  }
+  if (d.electoral) {
+    const warn = [];
+    if (world.crisis > 0.15) warn.push(`<b style="color:#ec835a">Hard times: ${pct(world.crisis)}.</b> Joblessness, slumps and cuts turn voters against the parties in power and toward outsiders.`);
+    if (world.emergency) warn.push(`<b style="color:#fab219">State of emergency</b> since year ${Math.floor(world.emergency.since / 12)}${world.emergency.renewals ? `, renewed ${world.emergency.renewals} time${world.emergency.renewals === 1 ? '' : 's'}` : ''}: curfews, searches without warrants, protests only with permission.`);
+    const plot = world.army ? world.army.plot : 0;
+    if (plot > 0.3) warn.push(`<b style="color:${plot > 0.6 ? '#d03b3b' : '#fab219'}">The army is ${plot > 0.6 ? 'plotting a coup' : 'restless'}.</b> Unhappy officers and a weak-looking government make a plot grow; a free press may expose it.`);
+    if (world.monarch) { const am = world.monarch.ambition || 0; warn.push(`${esc(world.monarch.name)} ${am < 0 ? 'believes in parliament and would refuse to sign a strongman\u2019s decrees' : am > 0.45 ? '<b style="color:#fab219">dreams of real power</b> and might side with a coup' : 'keeps out of politics'}.`); }
+    const dom = world.parties.find(p => p.id === world.dominant);
+    if (d.guided && dom) warn.push(`<b>Ruling party: ${esc(dom.name)}.</b> It gets state TV, patronage and a padded count; rivals need 7% to win seats. It always leads the government. If it falls below 40 seats and behind another party, or loses its majority and the opposition unites, democracy breaks through; so can months of mass protest.`);
+    if (warn.length) html += warn.join('<br>') + '<br>';
   }
   if (d.electoral) {
     const bloc = {};
-    for (const p of world.parties) if (p.seats > 0 && p.region == null && world.pushesChange(p.platform)) { const k = world.aimOf(p.platform); bloc[k] = (bloc[k] || 0) + p.seats; }
+    for (const p of world.parties) if (p.seats > 0 && p.region == null && world.pushesChange(p.platform)) { const k = world.aimOf(p.platform, p); bloc[k] = (bloc[k] || 0) + p.seats; }
     const camp = Object.entries(bloc).map(([k, n]) => `${n} seats for ${name(+k)}`).join(', ');
-    html += a ? `<b>Amendment in progress:</b> in year ${Math.floor(a.month / 12)}, ${a.seats} of 101 members voted to make Veyland a ${name(a.target).toLowerCase()}. It needs two-thirds again after the next election, then 60% yes in a referendum.`
+    html += a ? `<b>Amendment in progress:</b> in year ${Math.floor(a.month / 12)}, ${a.seats} of 101 members voted to make Veyland ${esc(IDEOLOGIES[a.target].as)}. It needs two-thirds again after the next election, then 60% yes in a referendum.`
       : `Needs two-thirds of parliament (67 seats) for the same new system in two elections running, then 60% yes in a referendum. ${camp ? `Campaigning now: ${camp}.` : 'No party in parliament is campaigning for a new system.'}`;
   } else if (d.council) {
     const r = world.directRun;
@@ -1076,19 +1184,21 @@ function brainOwnerHTML(p, isParty) {
   const best = scores.length ? Math.max(...scores) : 0;
   const hist = isParty ? p.history.slice(-8).map(h => `<span class="pill">Y${Math.floor(h[0] / 12)}: ${pct(h[1])}</span>`).join('') : '';
   return `<h3>${isParty ? `<i style="background:${p.color}"></i>` : ''}${esc(p.name)}</h3>
-    <div class="sub">${isParty ? `${esc(p.family)} (where its promises have drifted) · founded year ${Math.floor(p.founded / 12)}${p.formerNames && p.formerNames.length ? ` · formerly ${esc(p.formerNames.join(', '))}` : ''}${dead ? ' · <b>dissolved</b>' : ''}<br>${p.seats} seats · last vote ${pct(p.share)} · polls ${pct(p.poll || 0)}${gov ? ' · <b style="color:var(--hue)">in government</b>' : ''}`
+    <div class="sub">${isParty ? `${KIND[p.arch] ? `${esc(KIND[p.arch].label)}${p.outsider ? ' · an outsider movement' : ''} · its promises now look like: ${esc(p.family)}` : esc(p.family)} · founded year ${Math.floor(p.founded / 12)}${p.formerNames && p.formerNames.length ? ` · formerly ${esc(p.formerNames.join(', '))}` : ''}${dead ? ' · <b>dissolved</b>' : ''}<br>${p.seats} seats · last vote ${pct(p.share)} · polls ${pct(p.poll || 0)}${gov ? ' · <b style="color:var(--hue)">in government</b>' : ''}`
       : `Rules Veyland · approval ${pct(p.approval)}`}<br>${p.generation} round${p.generation === 1 ? '' : 's'} of learning · ${Math.round(p.money).toLocaleString()} cr in the bank</div>
     ${p.leader ? `<h4>Leader <small>charisma wins or loses votes; leaders resign after bad results, have scandals, grow old</small></h4>
     <div class="leader"><span>Name</span><b>${esc(p.leader.name)}</b><span>Age</span><span>${Math.floor(p.leader.age)}</span><span>Leader since</span><span>year ${Math.floor(p.leader.since / 12)}</span></div>
-    <div class="hbars" style="margin-top:6px">${db('Charisma', p.leader.charisma, 1)}</div>` : ''}
+    <div class="hbars" style="margin-top:6px">${db('Charisma', p.leader.charisma, 1)}${db('Ambition', p.leader.ambition || 0, 1, null, 'How much they want power for its own sake: the power-hungry erode democracy and back coups')}</div>` : ''}
+    ${isParty && KIND[p.arch] ? partyRootsHTML(p) : ''}
     <h4>Big choices <small>two extra outputs of its brain; above 70% means yes</small></h4>
     <div class="hbars">${isParty ? hb('New system', p.platform[OUT_CHANGE], world.pushesChange(p.platform) ? '#e07a9b' : '#3a3f47', pct(p.platform[OUT_CHANGE]), 'campaign to change the whole system') : ''}${hb('Go to war', p.platform[OUT_WAR], world.wantsWar(p.platform) ? '#d03b3b' : '#3a3f47', pct(p.platform[OUT_WAR]))}</div>
-    <p>${isParty ? (world.pushesChange(p.platform) ? `Campaigns to make Veyland a <b style="color:var(--text)">${esc(IDEOLOGIES[world.aimOf(p.platform)].name.toLowerCase())}</b> (the system its promises come closest to).` : 'Not campaigning to change the system.') + ' ' : ''}${world.wantsWar(p.platform) ? (world.war ? 'Wants to keep fighting.' : `Wants war with ${NEIGHBOUR}.`) : (world.war ? 'Wants peace.' : 'Wants peace with ' + NEIGHBOUR + '.')}${isParty && p.region != null ? ` Stands only in ${esc(REGIONS[p.region].name)}${p.homeShare != null ? ` (won ${pct(p.homeShare)} there)` : ''}.` : ''}</p>
-    <h4>Promises vs the law now <small>dot = what it promises · grey line = the law in force</small></h4>
-    <div class="hbars">${POLICIES.map((q, i) => `<span>${esc(q.name)}</span><span class="promise"><span class="cur" style="left:${world.P[i] * 100}%"></span><span class="pro" style="left:${p.platform[i] * 100}%;background:${isParty ? p.color : '#e07a9b'}"></span></span><span class="v">${pct(p.platform[i])}</span>`).join('')}</div>
+    <p>${isParty ? (world.pushesChange(p.platform) ? `Campaigns to make Veyland <b style="color:var(--text)">${esc(IDEOLOGIES[world.aimOf(p.platform, p)].as)}</b>${KIND[p.arch] && KIND[p.arch].aim ? '' : ' (the system its promises come closest to)'}.` : 'Not campaigning to change the system.') + ' ' : ''}${world.wantsWar(p.platform) ? (world.war ? 'Wants to keep fighting.' : `Wants war with ${NEIGHBOUR}.`) : (world.war ? 'Wants peace.' : 'Wants peace with ' + NEIGHBOUR + '.')}${isParty && p.region != null ? ` Stands only in ${esc(REGIONS[p.region].name)}${p.homeShare != null ? ` (won ${pct(p.homeShare)} there)` : ''}.` : ''}</p>
+    <h4>Promises vs the law now <small>dot = what it promises · ${isParty && p.core ? 'ring = what it stands for · ★ = its core laws (it never strays outside the band, unless the system forbids it) · ' : ''}grey line = the law in force</small></h4>
+    <div class="hbars">${POLICIES.map((q, i) => { const lane = isParty && KIND[p.arch] && KIND[p.arch].lane.includes(i);
+      return `<span>${esc(q.name)}${lane ? ' ★' : ''}</span><span class="promise">${lane ? `<span class="lane" style="left:${Math.max(world._lo(i), p.core[i] - 0.12) * 100}%;width:${Math.max(0, Math.min(world.ideology.hi[i], p.core[i] + 0.12) - Math.max(world._lo(i), p.core[i] - 0.12)) * 100}%;background:${p.color}"></span>` : ''}<span class="cur" style="left:${world.P[i] * 100}%"></span>${isParty && p.core ? `<span class="goal" style="left:${p.core[i] * 100}%;border-color:${p.color}"></span>` : ''}<span class="pro" style="left:${p.platform[i] * 100}%;background:${isParty ? p.color : '#e07a9b'}"></span></span><span class="v">${pct(p.platform[i])}</span>`; }).join('')}</div>
     <h4>Its brain <small>what it sees (left) → promises (right). Orange = positive link, blue = negative</small></h4>
     <canvas id="brain"></canvas>
-    <h4>${isParty ? 'Last primary' : 'Last power struggle'} <small>${isParty ? 'six versions of the brain tested in a poll; the winner leads, the next six are its variations' : world.ideology.rule === 'experts' ? 'six plans tested on the economic model' : 'six factions tested on their supporters (police count 3×)'}</small></h4>
+    <h4>${isParty ? 'Last primary' : 'Last power struggle'} <small>${isParty ? 'six versions of the brain tested in a poll; the winner leads, and next time it is tested against four variations of itself and one reset to the party\u2019s roots' : world.ideology.rule === 'experts' ? 'six plans tested on the economic model' : `six factions tested on their supporters (${baseText(world.ideology.base || { official: 3 })})`}</small></h4>
     <div class="hbars">${scores.length ? scores.map((s, i) => hb(`Candidate ${i + 1}${s === best ? ' ★' : ''}`, best > 0 ? s / best : 0, s === best ? (isParty ? p.color : '#e07a9b') : '#3a3f47', s.toFixed(2))).join('') : '<span class="hint" style="grid-column:1/-1">Not tested yet.</span>'}</div>
     <h4>Has it learned to take bribes? <small>learned from whether taking them later won or lost support</small></h4>
     <div class="hbars">${bribeRows}</div>
@@ -1096,6 +1206,20 @@ function brainOwnerHTML(p, isParty) {
     ${hist ? `<h4>Elections</h4><div>${hist}</div>` : ''}`;
 }
 
+/** Where a party comes from: whom it speaks for, what it stands for, and who actually votes for it. */
+function partyRootsHTML(p) {
+  const a = KIND[p.arch], voters = world.citizens.filter(c => c.lastVote === p.id), n = voters.length || 1, all = world.citizens.length;
+  const share = f => voters.filter(f).length / n, base = f => world.citizens.filter(f).length / all;
+  const rows = Object.entries(CLASS_WORDS).map(([k, w]) => db(w[0].toUpperCase() + w.slice(1), share(c => c.cls === k) - base(c => c.cls === k), 0.5, `${pct(share(c => c.cls === k))}`, `${pct(share(c => c.cls === k))} of its voters, ${pct(base(c => c.cls === k))} of everyone`)).join('');
+  const devout = share(c => c.religious > 0.5), loyal = share(c => c.pid === p.id && c.pidS > 0.4);
+  const regs = REGIONS.map((r, k) => [r.name, share(c => c.region === k) / Math.max(0.01, base(c => c.region === k)), k]).filter(x => world.inVeyland(x[2])).sort((x, y) => y[1] - x[1]);
+  const en = a.enemies.map(e => KIND[e].label), enemies = en.length > 1 ? en.slice(0, -1).join(', ') + ' or ' + en[en.length - 1] : en.join('');
+  return `<h4>Its roots <small>every party is founded as a kind of party, for a group of people; it learns its promises but never drops its core laws</small></h4>
+    <p>${esc(a.label)}: stands for ${esc(coreWords(p))}. Speaks for ${esc(baseWords(a).slice(0, 4).join(', '))}.${a.aim ? (IDEOLOGIES[world.regime].id === a.aim ? ' Veyland already has the system it wanted.' : ` Campaigns to make Veyland ${esc(IDEOLOGIES.find(d => d.id === a.aim).as)}.`) : ''}${enemies ? ` Will not govern with these kinds of party: ${esc(enemies)}.` : ''}</p>
+    ${voters.length ? `<h4>Who voted for it <small>${voters.length} people last time · blue = more than in the country as a whole, red = fewer</small></h4>
+    <div class="hbars">${rows}${db('Devout', devout - base(c => c.religious > 0.5), 0.5, pct(devout))}${hb('Loyal for years', loyal, p.color, pct(loyal), 'Vote for it out of habit: it would take a lot to change their minds')}</div>
+    <p class="hint">Strongest in ${esc(regs[0][0])}${regs[0][1] > 1.3 ? ` (${regs[0][1].toFixed(1)}× its national level)` : ''}, weakest in ${esc(regs[regs.length - 1][0])}.</p>` : ''}`;
+}
 function drawBrain(p, isParty) {
   const cv = $('brain'); if (!cv) return;
   const dpr = sizeCanvas(cv), ctx = cv.getContext('2d'), W = cv.width, H = cv.height;
@@ -1149,6 +1273,14 @@ function uprisingBalance() {
     <div class="hbars">${hb('Want change', a / tot, STATUS.rise, Math.round(a))}${hb('Defend it', d / tot, '#3987e5', Math.round(d))}</div>`;
 }
 
+/** Whose approval a ruling faction counts, in words: "owners 4×, business clubs 3×, police and officials 2×". */
+function baseText(base) {
+  return Object.entries(base).sort((a, b) => b[1] - a[1]).map(([k, n]) => `${CLASS_WORDS[k] || (COMMUNITIES.find(m => m.id === k) || { name: k }).name.toLowerCase()} ${n}×`).join(', ');
+}
+function howWords(r) {
+  return { coup: ' (coup)', putsch: ' (army coup)', royalcoup: ' (royal coup)', revolution: ' (revolution)', reform: ' (peaceful)', restored: ' (restored)',
+    selfcoup: IDEOLOGIES[r.regime].guided ? ' (soft coup)' : IDEOLOGIES[r.regime].id === 'absmon' ? ' (royal coup)' : IDEOLOGIES[r.regime].id === 'plutocracy' ? ' (state capture)' : ' (self-coup)' }[r.how] || '';
+}
 function regimeHTML() {
   const d = world.ideology;
   const locks = Object.entries(d.lock).map(([k, [lo, hi]]) => `<span class="pill">${esc(POLICIES[L[k]].name)} ${lo > 0 ? '≥ ' + pct(lo) : '≤ ' + pct(hi)}</span>`).join('');
@@ -1162,7 +1294,12 @@ function regimeHTML() {
     wealth: 'Parties win seats as in a democracy, but each vote counts by how much the voter earns: an owner’s vote can count thirty times a jobless worker’s. Parties learn to court the rich.',
     lottery: 'Every two years 51 citizens are picked at random, like a jury, to form the assembly. Whenever a clear majority of them believe more (or less) of a law would help them, it changes. No parties, no campaigns.',
     clergy: 'The Lantern Church’s Council of Elders rules. Every year factions of elders compete, tested on how their plans would go down with the faithful (church members count three times) and the police.',
-  }[d.rule] + (d.monarch ? ' A monarch reigns as head of state: the crown gives the system extra loyalty.' : '');
+  }[d.rule].replace(d.elective ? /When the monarch dies[^.]*\./ : /$^/, '').replace(/^One party rules\./, d.id === 'corporate' ? 'A board of company directors rules.' : d.personal ? 'One person rules, with a circle of loyalists.' : 'One party rules.')
+    .replace(/, with police and soldiers counting three times|\(police and soldiers, nobles and owners, the faithful\)|\(police, nobles and owners, the faithful\)/, d.base ? ` (${baseText(d.base)})` : '$&') + (d.monarch ? ' A monarch reigns as head of state: the crown gives the system extra loyalty.' : '')
+    + (d.guided ? ' But the elections are managed: the ruling party always leads the government, even with fewer seats than a rival, and gets state TV, patronage and a padded count, and rivals need 7% to win seats. If it still falls below 40 seats and behind a rival, or loses its majority and the opposition unites, democracy breaks through; so can months of mass protest.' : '')
+    + (d.id === 'lanternrep' ? ' The Church\u2019s elders bar parties hostile to the faith from parliament.' : '')
+    + (d.elective ? ' When a monarch dies the Electoral Diet of great families and provinces elects the next one from another house.' : '')
+    + (d.personal ? ' Everything depends on one person: when the Leader dies, heirs and generals fight over what is left.' : '');
   const f = world.faction;
   return `<h3><i style="background:${d.hue}"></i>${esc(d.name)}</h3><div class="sub">${esc(d.blurb)}</div>
     <h4>How laws are made</h4><p>${esc(how)}</p>
@@ -1170,7 +1307,7 @@ function regimeHTML() {
     ${d.rule === 'lottery' ? `<h4>The citizens' assembly <small>51 people picked by lottery in year ${Math.floor((world.assemblyDrawn || 0) / 12)}; click one to look inside</small></h4>
       <div>${world.assembly.map(id => world.citizens.find(c => c.id === id)).filter(Boolean).map(c => `<a href="#" data-cit="${c.id}" class="pill" style="color:var(--text)">${esc(c.name)}</a>`).join('')}</div>` : ''}
     ${uprisingBalance()}
-    <h4>History</h4><div>${world.regimeLog.map(r => `<span class="pill" style="border-color:${IDEOLOGIES[r.regime].hue}">Y${Math.floor(r.month / 12)} ${esc(IDEOLOGIES[r.regime].name)}${r.how === 'coup' ? ' (coup)' : r.how === 'revolution' ? ' (revolution)' : r.how === 'reform' ? ' (peaceful)' : ''}</span>`).join('')}</div>
+    <h4>History</h4><div>${world.regimeLog.map(r => `<span class="pill" style="border-color:${IDEOLOGIES[r.regime].hue}">Y${Math.floor(r.month / 12)} ${esc(IDEOLOGIES[r.regime].name)}${howWords(r)}</span>`).join('')}</div>
     ${f ? '<div style="margin-top:14px;border-top:1px solid var(--line);padding-top:12px">' + brainOwnerHTML(f, false) + '</div>' : ''}`;
 }
 
